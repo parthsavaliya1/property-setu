@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "PropertySetu",
+    "slug": "propertyhub",
+    "icon": "./assets/logo.png",
+    "scheme": "propertyhub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/center-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0e4d32"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.propertyhub.app"
+    },
+    "android": {
+      "package": "com.propertyhub.app",
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "GharSetu uses photos you choose for property listings."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PropertySetu uses your location to fill the address and to show homes near you."
+        }
+      ]
+    ]
+  }
+}
