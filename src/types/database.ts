@@ -226,6 +226,7 @@ export type ChatThread = {
   created_at: string;
   property_title?: string;
   other_name?: string | null;
+  other_avatar?: string | null;
   last_message?: string | null;
   last_at?: string | null;
 };
@@ -235,6 +236,16 @@ export type ChatMessage = {
   conversation_id: string;
   sender_id: string;
   body: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_kind?: "image" | "document" | null;
+  deleted?: boolean;
+  reply_to_id?: string | null;
+  reply_body?: string | null;
+  reply_kind?: "image" | "document" | null;
+  reply_name?: string | null;
+  reply_deleted?: boolean;
+  reactions?: Array<{ emoji: string; count: number; mine?: boolean }>;
   created_at: string;
   mine?: boolean;
 };

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { PropertyGridCard, propertyGridCardWidth, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, EmptyState, Field, ListSkeleton, PageHeader, PropertyGridSkeleton, styles } from "../components/ui";
@@ -43,9 +43,9 @@ export function MenuScreen({
   ];
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line }}>
-        <View style={{ width: 42 }} />
-        <Image source={require("../../assets/splash.png")} style={{ width: 44, height: 44, borderRadius: 12 }} resizeMode="cover" />
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line }}>
+        <Image source={require("../../assets/splash.png")} style={{ width: 40, height: 40, borderRadius: 10 }} resizeMode="cover" />
+        <Text style={{ flex: 1, marginLeft: 10, fontSize: 18, fontWeight: "800", color: colors.ink }}>PropertySetu</Text>
         <Pressable onPress={onClose} hitSlop={12} style={{ width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.page }}>
           <Ionicons name="close" size={22} color={colors.ink} />
         </Pressable>
@@ -484,7 +484,20 @@ export function InquiriesScreen({ onChat }: { onChat: (propertyId: string, buyer
   );
 }
 
-export function VisitsScreen() {
+function visitStatusStyle(status: string) {
+  if (status === "confirmed") return { bg: "#E7F0EA", color: colors.success, label: "Confirmed" };
+  if (status === "completed") return { bg: colors.primarySoft, color: colors.primaryDark, label: "Completed" };
+  if (status === "cancelled") return { bg: "#F8E6E3", color: colors.danger, label: "Cancelled" };
+  if (status === "rescheduled") return { bg: "#F8EEDD", color: colors.warning, label: "Rescheduled" };
+  return { bg: "#F8EEDD", color: colors.warning, label: "Requested" };
+}
+
+function visitWhen(value?: string | null) {
+  if (!value) return "Time not set";
+  return new Date(value).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+export function VisitsScreen({ onOpen }: { onOpen: (id: string) => void }) {
   const { token, me } = useAuth();
   const [items, setItems] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -507,24 +520,50 @@ export function VisitsScreen() {
   }, [token]);
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <PageHeader title="Scheduled Visits" />
-      <ScrollView contentContainerStyle={styles.body}>
+      <PageHeader title="Scheduled Visits" subtitle={items.length ? `${items.length} visit${items.length === 1 ? "" : "s"}` : "Tap a visit to open the property"} />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28 }}>
       {loading ? <ListSkeleton /> : null}
       {!loading && items.length === 0 ? <EmptyState kind="search" /> : null}
-      {!loading ? items.map((item) => (
-        <View key={item.id} style={styles.card}>
-          <View style={styles.cardBody}>
-            <Text style={styles.title}>{item.property_title}</Text>
-            <Text style={styles.meta}>{item.status} · {item.scheduled_at ? new Date(item.scheduled_at).toLocaleString() : ""}</Text>
-            {item.buyer_id !== me?.profile?.id && item.status === "requested" && token ? (
-              <Button title="Confirm" onPress={async () => {
-                await api.updateVisit(item.id, { status: "confirmed" }, token);
-                setItems((current) => current.map((row) => row.id === item.id ? { ...row, status: "confirmed" } : row));
-              }} />
+      {!loading ? items.map((item) => {
+        const tone = visitStatusStyle(item.status);
+        const place = [item.locality, item.city].filter(Boolean).join(", ");
+        const canConfirm = item.buyer_id !== me?.profile?.id && item.status === "requested" && Boolean(token);
+        return (
+          <View key={item.id} style={[styles.card, { marginBottom: 12 }]}>
+            <Pressable onPress={() => onOpen(item.property_slug || item.property_id)} style={{ flexDirection: "row", padding: 12, gap: 12 }}>
+              <View style={{ width: 84, height: 84, borderRadius: 16, overflow: "hidden", backgroundColor: colors.secondary }}>
+                {item.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: "100%" }} /> : (
+                  <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="home-outline" size={26} color={colors.primary} />
+                  </View>
+                )}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+                  <Text style={{ flex: 1, fontWeight: "800", fontSize: 16, color: colors.ink }} numberOfLines={2}>{item.property_title || "Property"}</Text>
+                  <View style={{ backgroundColor: tone.bg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ color: tone.color, fontSize: 11, fontWeight: "800" }}>{tone.label}</Text>
+                  </View>
+                </View>
+                {place ? <Text style={{ color: colors.muted, marginTop: 4 }} numberOfLines={1}>{place}</Text> : null}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 }}>
+                  <Ionicons name="calendar-outline" size={14} color={colors.primary} />
+                  <Text style={{ color: colors.ink, fontWeight: "600", fontSize: 13 }}>{visitWhen(item.scheduled_at)}</Text>
+                </View>
+              </View>
+            </Pressable>
+            {canConfirm ? (
+              <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+                <Button title="Confirm visit" onPress={async () => {
+                  if (!token) return;
+                  await api.updateVisit(item.id, { status: "confirmed" }, token);
+                  setItems((current) => current.map((row) => row.id === item.id ? { ...row, status: "confirmed" } : row));
+                }} />
+              </View>
             ) : null}
           </View>
-        </View>
-      )) : null}
+        );
+      }) : null}
       </ScrollView>
     </View>
   );
@@ -691,10 +730,33 @@ export function EditProfileScreen() {
   );
 }
 
+function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function dayLabel(value: string) {
+  const date = new Date(value);
+  const now = new Date();
+  if (sameDay(date, now)) return "Today";
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(date, yesterday)) return "Yesterday";
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: date.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+}
+
+function noticeVisual(type: string) {
+  if (type === "new_inquiry") return { icon: "chatbubble-ellipses-outline" as const, bg: colors.primarySoft, color: colors.primaryDark, chip: "Enquiry" };
+  if (type === "visit_confirmed") return { icon: "checkmark-circle-outline" as const, bg: "#E7F0EA", color: colors.success, chip: "Visit" };
+  return { icon: "calendar-outline" as const, bg: "#F8EEDD", color: colors.warning, chip: "Visit" };
+}
+
 export function NotificationsScreen({ onOpen }: { onOpen: (item: NotificationItem) => void }) {
   const { token } = useAuth();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<"all" | "enquiry" | "visit">("all");
+
   useEffect(() => {
     if (!token) {
       setLoading(false);
@@ -712,24 +774,114 @@ export function NotificationsScreen({ onOpen }: { onOpen: (item: NotificationIte
       active = false;
     };
   }, [token]);
+
+  const unread = items.filter((item) => !item.is_read).length;
+  const shown = items.filter((item) => {
+    if (filter === "enquiry") return item.type === "new_inquiry";
+    if (filter === "visit") return item.type === "visit_request" || item.type === "visit_confirmed";
+    return true;
+  });
+
+  async function refresh() {
+    if (!token) return;
+    setRefreshing(true);
+    try {
+      setItems(await api.notifications(token));
+    } catch {
+      setItems([]);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function markAll() {
+    if (!token || !unread) return;
+    await api.readNotifications(token);
+    setItems((current) => current.map((item) => ({ ...item, is_read: true })));
+  }
+
+  const tabs = [
+    { id: "all" as const, label: "All" },
+    { id: "enquiry" as const, label: "Enquiries" },
+    { id: "visit" as const, label: "Visits" },
+  ];
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <PageHeader title="Notifications" />
-      <ScrollView contentContainerStyle={styles.body}>
-      {loading ? <ListSkeleton /> : items.map((item) => (
-        <Pressable key={item.id} style={[styles.card, { borderWidth: 1, borderColor: item.is_read ? colors.line : colors.primary }]} onPress={async () => {
-          if (!token) return;
-          await api.readNotification(item.id, token);
-          setItems((current) => current.map((row) => row.id === item.id ? { ...row, is_read: true } : row));
-          onOpen(item);
-        }}>
-          <View style={styles.cardBody}>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.meta}>{item.message}</Text>
+      <PageHeader
+        title="Notifications"
+        subtitle={unread ? `${unread} unread` : "You're all caught up"}
+        right={(
+          <Pressable
+            onPress={markAll}
+            disabled={!unread}
+            hitSlop={8}
+            style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", opacity: unread ? 1 : 0.4 }}
+          >
+            <Ionicons name="checkmark-done-outline" size={20} color={colors.primaryDark} />
+          </Pressable>
+        )}
+      />
+      <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line }}>
+        {tabs.map((tab) => {
+          const active = filter === tab.id;
+          return (
+            <Pressable key={tab.id} onPress={() => setFilter(tab.id)} style={{ flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, backgroundColor: active ? colors.primary : colors.primarySoft, borderWidth: 1, borderColor: active ? colors.primary : colors.line }}>
+              <Text style={{ fontWeight: "700", fontSize: 13, color: active ? colors.white : colors.muted }}>{tab.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: 12, paddingBottom: 28 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+      >
+      {loading ? <View style={{ paddingHorizontal: 16 }}><ListSkeleton /></View> : shown.map((item, index) => {
+        const visual = noticeVisual(item.type);
+        const label = dayLabel(item.created_at);
+        const previous = index > 0 ? dayLabel(shown[index - 1].created_at) : null;
+        return (
+          <View key={item.id}>
+            {label !== previous ? <Text style={{ marginTop: 8, marginBottom: 6, marginHorizontal: 20, fontSize: 13, fontWeight: "800", color: colors.muted }}>{label}</Text> : null}
+            <Pressable onPress={async () => {
+              if (!token) return;
+              if (!item.is_read) {
+                await api.readNotification(item.id, token);
+                setItems((current) => current.map((row) => row.id === item.id ? { ...row, is_read: true } : row));
+              }
+              onOpen(item);
+            }} style={{ marginHorizontal: 16, marginBottom: 8, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, overflow: "hidden" }}>
+              {!item.is_read ? <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, backgroundColor: colors.primary }} /> : null}
+              <View style={{ flexDirection: "row", alignItems: "flex-start", padding: 14, gap: 12 }}>
+                <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: visual.bg, alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name={visual.icon} size={20} color={visual.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+                    <Text style={{ flex: 1, fontSize: 15, fontWeight: item.is_read ? "700" : "800", color: colors.ink, lineHeight: 21 }}>{item.title}</Text>
+                    {!item.is_read ? <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: colors.warning, marginTop: 6 }} /> : null}
+                  </View>
+                  {item.message ? <Text style={{ marginTop: 4, fontSize: 14, lineHeight: 20, color: colors.muted }}>{item.message}</Text> : null}
+                  <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Ionicons name="time-outline" size={13} color={colors.faint} />
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: colors.faint }}>{new Date(item.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</Text>
+                    <View style={{ marginLeft: "auto", backgroundColor: visual.bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "800", color: visual.color }}>{visual.chip}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </Pressable>
           </View>
-        </Pressable>
-      ))}
-      {!loading && items.length === 0 ? <Text style={styles.meta}>No notifications yet. Saves, enquiries, visits, and messages show up here.</Text> : null}
+        );
+      })}
+      {!loading && shown.length === 0 ? (
+        <View style={{ alignItems: "center", marginHorizontal: 16, marginTop: 24, padding: 24, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card }}>
+          <Ionicons name="notifications-off-outline" size={34} color={colors.faint} />
+          <Text style={{ marginTop: 10, fontSize: 18, fontWeight: "800", color: colors.ink }}>No notifications</Text>
+          <Text style={{ marginTop: 6, fontSize: 14, color: colors.muted, textAlign: "center" }}>Enquiries and visit requests from other people show up here.</Text>
+        </View>
+      ) : null}
       </ScrollView>
     </View>
   );

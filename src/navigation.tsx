@@ -205,7 +205,7 @@ export function RootNavigation() {
           <Stack.Screen name="Schedule">{({ route }) => <ScheduleScreen id={route.params.id} onDone={() => navigationRef.navigate("Visits")} />}</Stack.Screen>
           <Stack.Screen name="MyProperties">{() => <MyPropertiesScreen onOpen={openDetails} onEdit={(id) => navigationRef.navigate("Add", { id })} />}</Stack.Screen>
           <Stack.Screen name="Inquiries">{() => <InquiriesScreen onChat={(propertyId, buyerId) => navigationRef.navigate("Chat", { propertyId, buyerId: buyerId || undefined })} />}</Stack.Screen>
-          <Stack.Screen name="Visits" component={VisitsScreen} />
+          <Stack.Screen name="Visits">{() => <VisitsScreen onOpen={openDetails} />}</Stack.Screen>
           <Stack.Screen name="EditProfile">{() => session ? <EditProfileScreen /> : <LoginScreen onBrowse={() => navigationRef.navigate("Main")} />}</Stack.Screen>
           <Stack.Screen name="Profile">{() => (
             <ProfileScreen
@@ -228,8 +228,9 @@ export function RootNavigation() {
                     else if (item.data?.property_id) navigationRef.navigate("Chat", { propertyId: item.data.property_id });
                     return;
                   }
-                  if (item.type === "visit_request") {
-                    navigationRef.navigate("Visits");
+                  if (item.type === "visit_request" || item.type === "visit_confirmed") {
+                    if (item.data?.property_id) navigationRef.navigate("Details", { id: item.data.property_id });
+                    else navigationRef.navigate("Visits");
                     return;
                   }
                   if (item.data?.property_id) navigationRef.navigate("Details", { id: item.data.property_id });

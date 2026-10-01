@@ -705,37 +705,41 @@ function Choice({ label, value, placeholder, options, onChange }: { label: strin
   );
 }
 
-export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void }) {
-  const { token } = useAuth();
-  const [item, setItem] = useState<PropertyDetail | null>(null);
-  const dates = Array.from({ length: 14 }, (_, index) => {
+const visitTimes = ["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "04:00 PM", "06:00 PM"];
+const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function upcomingDates() {
+  return Array.from({ length: 14 }, (_, index) => {
     const value = new Date();
     value.setDate(value.getDate() + index + 1);
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return `${value.getDate()} ${months[value.getMonth()]} ${value.getFullYear()}`;
+    value.setHours(0, 0, 0, 0);
+    return value;
   });
+}
+
+export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void }) {
+  const { token } = useAuth();
+  const dates = upcomingDates();
+  const [item, setItem] = useState<PropertyDetail | null>(null);
   const [date, setDate] = useState(dates[0]);
   const [time, setTime] = useState("11:00 AM");
-  const [open, setOpen] = useState<"date" | "time" | null>(null);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const times = ["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "04:00 PM", "06:00 PM"];
 
   useEffect(() => {
     api.property(id, token).then(setItem).catch(() => setItem(null));
   }, [id, token]);
 
   function selectedDate() {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const [day, month, year] = date.split(" ");
     const match = time.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if (!match || !day || !month || !year) return null;
+    if (!match) return null;
     let hours = Number(match[1]);
     const minutes = Number(match[2]);
     if (match[3].toUpperCase() === "PM" && hours < 12) hours += 12;
     if (match[3].toUpperCase() === "AM" && hours === 12) hours = 0;
-    return new Date(Number(year), months.indexOf(month), Number(day), hours, minutes);
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes);
   }
 
   async function submit() {
@@ -761,51 +765,56 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
   }
 
   const place = [item?.locality, item?.city].filter(Boolean).join(", ");
-  const choices = open === "date" ? dates : times;
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <PageHeader title="Schedule a Property Visit" />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 28 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View style={{ width: 92, height: 74, borderRadius: 14, overflow: "hidden", backgroundColor: colors.secondary }}>
-            {item?.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : null}
+      <PageHeader title="Schedule a visit" subtitle="Pick a day and time that works for you" />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
+        <View style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 12, flexDirection: "row", gap: 12, alignItems: "center" }}>
+          <View style={{ width: 88, height: 88, borderRadius: 16, overflow: "hidden", backgroundColor: colors.secondary }}>
+            {item?.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : (
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="home-outline" size={26} color={colors.primary} />
+              </View>
+            )}
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontWeight: "600", fontSize: 16, color: colors.ink }}>{item?.title || "Property"}</Text>
-            {place ? <Text style={{ color: colors.muted, marginTop: 3 }}>{place}</Text> : null}
-            <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 16, marginTop: 4 }}>{inr(item?.price)}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontWeight: "800", fontSize: 16, color: colors.ink }} numberOfLines={2}>{item?.title || "Property"}</Text>
+            {place ? <Text style={{ color: colors.muted, marginTop: 4 }} numberOfLines={1}>{place}</Text> : null}
+            <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 16, marginTop: 6 }}>{inr(item?.price)}</Text>
           </View>
         </View>
-        <View style={{ flexDirection: "row", gap: 12, marginTop: 22 }}>
-          <Pressable onPress={() => setOpen(open === "date" ? null : "date")} style={{ flex: 1 }}>
-            <Text style={{ color: colors.ink, fontWeight: "600", marginBottom: 8 }}>Preferred Date</Text>
-            <View style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: colors.ink, fontWeight: "600" }}>{date}</Text>
-              <Ionicons name="chevron-down" size={16} color={colors.faint} />
-            </View>
-          </Pressable>
-          <Pressable onPress={() => setOpen(open === "time" ? null : "time")} style={{ flex: 1 }}>
-            <Text style={{ color: colors.ink, fontWeight: "600", marginBottom: 8 }}>Preferred Time</Text>
-            <View style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: colors.ink, fontWeight: "600" }}>{time}</Text>
-              <Ionicons name="chevron-down" size={16} color={colors.faint} />
-            </View>
-          </Pressable>
-        </View>
-        {open ? (
-          <View style={{ marginTop: 8, borderWidth: 1, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.card, overflow: "hidden" }}>
-            {choices.map((option) => (
-              <Pressable key={option} onPress={() => { if (open === "date") setDate(option); else setTime(option); setOpen(null); }} style={{ paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.lineSoft }}>
-                <Text style={{ color: option === (open === "date" ? date : time) ? colors.primary : colors.ink, fontWeight: option === (open === "date" ? date : time) ? "700" : "500" }}>{option}</Text>
+
+        <Text style={{ color: colors.ink, fontWeight: "800", fontSize: 16, marginTop: 22, marginBottom: 10 }}>Preferred date</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {dates.map((option) => {
+            const active = option.getTime() === date.getTime();
+            return (
+              <Pressable key={option.toISOString()} onPress={() => setDate(option)} style={{ width: 68, borderRadius: 16, paddingVertical: 12, alignItems: "center", backgroundColor: active ? colors.primary : colors.card, borderWidth: 1, borderColor: active ? colors.primary : colors.line }}>
+                <Text style={{ color: active ? "rgba(255,255,255,0.8)" : colors.muted, fontSize: 12, fontWeight: "700" }}>{weekdays[option.getDay()]}</Text>
+                <Text style={{ color: active ? colors.white : colors.ink, fontSize: 18, fontWeight: "800", marginTop: 2 }}>{option.getDate()}</Text>
+                <Text style={{ color: active ? "rgba(255,255,255,0.8)" : colors.muted, fontSize: 12, fontWeight: "600" }}>{monthNames[option.getMonth()]}</Text>
               </Pressable>
-            ))}
-          </View>
-        ) : null}
-        <Text style={{ color: colors.ink, fontWeight: "600", marginTop: 18, marginBottom: 8 }}>Message (Optional)</Text>
-        <TextInput value={notes} onChangeText={setNotes} placeholder="Any specific requirement..." placeholderTextColor={colors.faint} multiline style={{ minHeight: 96, textAlignVertical: "top", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 15 }} />
+            );
+          })}
+        </ScrollView>
+
+        <Text style={{ color: colors.ink, fontWeight: "800", fontSize: 16, marginTop: 22, marginBottom: 10 }}>Preferred time</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {visitTimes.map((option) => {
+            const active = option === time;
+            return (
+              <Pressable key={option} onPress={() => setTime(option)} style={{ paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, backgroundColor: active ? colors.primary : colors.card, borderWidth: 1, borderColor: active ? colors.primary : colors.line }}>
+                <Text style={{ color: active ? colors.white : colors.ink, fontWeight: "700" }}>{option}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={{ color: colors.ink, fontWeight: "800", fontSize: 16, marginTop: 22, marginBottom: 10 }}>Message</Text>
+        <TextInput value={notes} onChangeText={setNotes} placeholder="Any specific requirement (optional)" placeholderTextColor={colors.faint} multiline style={{ minHeight: 110, textAlignVertical: "top", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 15 }} />
         {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
-        <Pressable onPress={submit} disabled={busy} style={({ pressed }) => ({ marginTop: 24, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
-          <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>{busy ? "Requesting..." : "Request Visit"}</Text>
+        <Pressable onPress={submit} disabled={busy} style={({ pressed }) => ({ marginTop: 22, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
+          <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>{busy ? "Requesting..." : "Request visit"}</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

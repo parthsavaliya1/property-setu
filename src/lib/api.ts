@@ -3,7 +3,9 @@ import { File } from "expo-file-system";
 import type { Category, ChatMessage, ChatThread, Inquiry, Me, NotificationItem, PropertyCard, PropertyDetail, Visit, WalletTransaction } from "../types/database";
 
 function usableHost(value?: string | null) {
-  const host = value?.split(":")[0];
+  if (!value) return null;
+  const withoutProtocol = value.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  const host = withoutProtocol.split("/")[0]?.split(":")[0];
   if (!host || host === "0.0.0.0" || host === "localhost" || host === "127.0.0.1") return null;
   return host;
 }
@@ -173,12 +175,25 @@ export const api = {
   updateMe: (payload: unknown, token: string) => request("/me", { method: "PATCH", body: JSON.stringify(payload) }, token),
   notifications: (token: string) => request<NotificationItem[]>("/notifications", {}, token),
   readNotification: (id: string, token: string) => request(`/notifications/${id}/read`, { method: "PATCH" }, token),
+  readNotifications: (token: string) => request<void>("/notifications/read", { method: "PATCH" }, token),
   chats: (token: string) => request<ChatThread[]>("/chats", {}, token),
+  chat: (id: string, token: string) => request<ChatThread>(`/chats/${id}`, {}, token),
   openChat: (propertyId: string, token: string, buyerId?: string) =>
     request<ChatThread>(`/properties/${propertyId}/chat`, { method: "POST", body: JSON.stringify(buyerId ? { buyer_id: buyerId } : {}) }, token),
   messages: (id: string, token: string) => request<ChatMessage[]>(`/chats/${id}/messages`, {}, token),
-  sendMessage: (id: string, body: string, token: string) =>
-    request<ChatMessage>(`/chats/${id}/messages`, { method: "POST", body: JSON.stringify({ body }) }, token),
+  sendMessage: (
+    id: string,
+    payload: { body?: string; attachment_url?: string; attachment_name?: string; attachment_kind?: "image" | "document"; reply_to_id?: string },
+    token: string
+  ) => request<ChatMessage>(`/chats/${id}/messages`, { method: "POST", body: JSON.stringify(payload) }, token),
+  deleteMessage: (id: string, messageId: string, token: string) =>
+    request<ChatMessage>(`/chats/${id}/messages/${messageId}`, { method: "DELETE" }, token),
+  reactMessage: (id: string, messageId: string, emoji: string, token: string) =>
+    request<{ messageId: string; myEmoji: string | null; reactions: Array<{ emoji: string; count: number; mine?: boolean }> }>(
+      `/chats/${id}/messages/${messageId}/reactions`,
+      { method: "POST", body: JSON.stringify({ emoji }) },
+      token
+    ),
   paymentOrder: (propertyId: string, listingBadge: "standard" | "premium", token: string) =>
     request<{ key_id: string; order_id: string; amount: number; currency: string; description: string }>(
       "/payments/order",

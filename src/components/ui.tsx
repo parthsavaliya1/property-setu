@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Dimensions, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { buttonShadow, cardShadow, colors } from "../theme";
@@ -200,7 +200,7 @@ export function Field({ label, ...props }: { label?: string } & TextInputProps) 
   );
 }
 
-export function PageHeader({ title, onBack }: { title: string; onBack?: () => void }) {
+export function PageHeader({ title, subtitle, onBack, right }: { title: string; subtitle?: string; onBack?: () => void; right?: ReactNode }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   return (
@@ -212,8 +212,11 @@ export function PageHeader({ title, onBack }: { title: string; onBack?: () => vo
       >
         <Ionicons name="arrow-back" size={24} color={colors.ink} />
       </Pressable>
-      <Text style={{ flex: 1, marginLeft: 12, fontSize: 20, fontWeight: "800", color: colors.ink }} numberOfLines={1}>{title}</Text>
-      <View style={{ width: 46 }} />
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Text style={{ fontSize: 20, fontWeight: "800", color: colors.ink }} numberOfLines={1}>{title}</Text>
+        {subtitle ? <Text style={{ marginTop: 2, fontSize: 13, color: colors.muted }} numberOfLines={1}>{subtitle}</Text> : null}
+      </View>
+      {right ?? <View style={{ width: 46 }} />}
     </View>
   );
 }
