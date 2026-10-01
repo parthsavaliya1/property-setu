@@ -1,9 +1,9 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCallback, useEffect, useState } from "react";
-import { Dimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Share, Text, TextInput, View } from "react-native";
-import { PropertyGridCard } from "../components/PropertyGridCard";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal, PanResponder, Platform, Pressable, ScrollView, Share, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { PropertyGridCard, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { PropertyMap } from "../components/PropertyMap";
 import { DetailSkeleton, EmptyState, PageHeader, PropertyGridSkeleton, SkeletonBlock, styles } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
@@ -258,7 +258,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   const [nearCity, setNearCity] = useState("");
   const [located, setLocated] = useState(false);
   const [q, setQ] = useState("");
-  const [listing, setListing] = useState("sale");
+  const [listing, setListing] = useState("");
   const [category, setCategory] = useState("");
   const [propertyType, setPropertyType] = useState("");
   const [price, setPrice] = useState("");
@@ -291,14 +291,10 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     readCurrentPlace()
       .then((place) => {
         if (!active) return;
-        const detected = cityName(place.city) || profileCity;
-        setNearCity(detected);
-        setQ((current) => current || detected);
+        setNearCity(cityName(place.city) || profileCity);
       })
       .catch(() => {
-        if (!active) return;
-        setNearCity(profileCity);
-        setQ((current) => current || profileCity);
+        if (active) setNearCity(profileCity);
       })
       .finally(() => {
         if (active) setLocated(true);
@@ -338,7 +334,6 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     };
   }, [q, listing, category, propertyType, price, bedrooms, token, nearCity, located]);
 
-  const cardWidth = (Dimensions.get("window").width - 16 * 2 - 12) / 2;
   const shown = sortForSearch(
     [...items]
       .filter((item) => !verifiedOnly || item.verification_status === "verified" || item.owner_verified)
@@ -411,25 +406,22 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
           </Pressable>
         </View>
       </View>
-      {!loading ? <Text style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, color: "#64748B", fontSize: 12, fontWeight: "700" }}>{shown.length} {shown.length === 1 ? "property" : "properties"}</Text> : null}
+      {!loading ? <Text style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, color: "#8A8178", fontSize: 13, fontWeight: "600" }}>{shown.length} {shown.length === 1 ? "result" : "results"}{q.trim() ? ` • ${q.trim()}` : ""}</Text> : null}
       <FlatList
         style={{ flex: 1 }}
         data={loading ? [] : shown}
         keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={{ gap: 12 }}
-        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingBottom: 28, paddingTop: 4, gap: 12 }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingBottom: 28, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <PropertyGridCard
+          <PropertyListCard
             item={item}
-            width={cardWidth}
             saved={isSaved(item.id, item.is_favorite)}
             onPress={() => onOpen(item.slug || item.id)}
             onSave={() => toggleSaved(item)}
           />
         )}
-        ListEmptyComponent={loading ? <PropertyGridSkeleton width={cardWidth} /> : <EmptyState kind="search" />}
+        ListEmptyComponent={loading ? <PropertyListSkeleton /> : <EmptyState kind="search" />}
       />
       <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" }}>
@@ -559,6 +551,145 @@ export function MapScreen({ onOpen, showBack }: { onOpen: (id: string) => void; 
   );
 }
 
+function touchDistance(touches: ReadonlyArray<{ pageX: number; pageY: number }>) {
+  const [a, b] = touches;
+  if (!a || !b) return 0;
+  return Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
+}
+
+function ZoomablePhoto({ uri, width, height, active, onZoomed }: { uri: string; width: number; height: number; active: boolean; onZoomed: (zoomed: boolean) => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const scaleValue = useRef(1);
+  const tx = useRef(0);
+  const ty = useRef(0);
+  const lastTap = useRef(0);
+  const last = useRef({ scale: 1, x: 0, y: 0, distance: 0, pinching: false });
+
+  function applyScale(next: number) {
+    const value = Math.min(4, Math.max(1, next));
+    scaleValue.current = value;
+    scale.setValue(value);
+    if (value === 1) {
+      tx.current = 0;
+      ty.current = 0;
+      translateX.setValue(0);
+      translateY.setValue(0);
+    }
+    onZoomed(value > 1.05);
+  }
+
+  useEffect(() => {
+    if (active) return;
+    applyScale(1);
+  }, [active]);
+
+  const responder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (event) => event.nativeEvent.touches.length >= 2 || scaleValue.current > 1.05,
+      onPanResponderTerminationRequest: () => scaleValue.current <= 1.05,
+      onPanResponderGrant: (event) => {
+        const touches = event.nativeEvent.touches;
+        last.current.scale = scaleValue.current;
+        last.current.x = tx.current;
+        last.current.y = ty.current;
+        last.current.pinching = touches.length >= 2;
+        last.current.distance = touchDistance(touches);
+      },
+      onPanResponderMove: (event, gesture) => {
+        const touches = event.nativeEvent.touches;
+        if (touches.length >= 2) {
+          const nextDistance = touchDistance(touches);
+          if (!last.current.pinching || !last.current.distance) {
+            last.current.pinching = true;
+            last.current.distance = nextDistance;
+            last.current.scale = scaleValue.current;
+            return;
+          }
+          applyScale(last.current.scale * (nextDistance / last.current.distance));
+          return;
+        }
+        last.current.pinching = false;
+        if (scaleValue.current <= 1.05) return;
+        tx.current = last.current.x + gesture.dx;
+        ty.current = last.current.y + gesture.dy;
+        translateX.setValue(tx.current);
+        translateY.setValue(ty.current);
+      },
+      onPanResponderRelease: () => {
+        last.current.pinching = false;
+        if (scaleValue.current <= 1.05) applyScale(1);
+      },
+    })
+  ).current;
+
+  function onDoubleTap() {
+    const now = Date.now();
+    if (now - lastTap.current < 280) {
+      applyScale(scaleValue.current > 1.05 ? 1 : 2.5);
+      lastTap.current = 0;
+      return;
+    }
+    lastTap.current = now;
+  }
+
+  return (
+    <View style={{ width, height, justifyContent: "center" }} {...responder.panHandlers}>
+      <Pressable onPress={onDoubleTap}>
+        <Animated.Image
+          source={{ uri }}
+          resizeMode="contain"
+          style={{ width, height: height * 0.72, transform: [{ translateX }, { translateY }, { scale }] }}
+        />
+      </Pressable>
+    </View>
+  );
+}
+
+function PhotoZoom({ photos, startIndex, onClose }: { photos: string[]; startIndex: number; onClose: () => void }) {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const pager = useRef<ScrollView>(null);
+  const [index, setIndex] = useState(startIndex);
+  const [zoomed, setZoomed] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => pager.current?.scrollTo({ x: startIndex * width, animated: false }), 0);
+    return () => clearTimeout(timer);
+  }, [startIndex, width]);
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <ScrollView
+          ref={pager}
+          horizontal
+          pagingEnabled
+          scrollEnabled={!zoomed}
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(event) => setIndex(Math.round(event.nativeEvent.contentOffset.x / width))}
+        >
+          {photos.map((uri, photo) => (
+            <ZoomablePhoto key={`${uri}-${photo}`} uri={uri} width={width} height={height} active={photo === index} onZoomed={setZoomed} />
+          ))}
+        </ScrollView>
+        <Pressable onPress={onClose} hitSlop={8} style={{ position: "absolute", top: insets.top + 10, right: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="close" size={22} color="white" />
+        </Pressable>
+        <View style={{ position: "absolute", left: 0, right: 0, bottom: Math.max(insets.bottom, 16), alignItems: "center", gap: 10 }}>
+          {photos.length > 1 ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              {photos.map((_, photo) => <View key={photo} style={{ width: photo === index ? 16 : 7, height: 7, borderRadius: 4, backgroundColor: photo === index ? "white" : "rgba(255,255,255,0.45)" }} />)}
+            </View>
+          ) : null}
+          <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: "600" }}>Pinch or double-tap to zoom</Text>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedule: (propertyId: string) => void; onChat: (propertyId: string) => void }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -570,10 +701,15 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
   const [note, setNote] = useState("");
   const [tab, setTab] = useState<"overview" | "amenities" | "location" | "documents">("overview");
   const [expanded, setExpanded] = useState(false);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const { width } = useWindowDimensions();
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setPhotoIndex(0);
+    setZoomOpen(false);
     api.property(id, token).then((row) => {
       if (active) setItem(row);
     }).catch((err) => {
@@ -611,7 +747,6 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
   if (!item) return <View style={[styles.body, { backgroundColor: "white", flex: 1 }]}><Text>{note || "This property is not available."}</Text></View>;
 
   const liked = isSaved(item.id, item.is_favorite);
-  const width = Dimensions.get("window").width;
   const photos = (item.images?.length
     ? item.images.filter((image) => image.image_type !== "video").map((image) => image.image_url)
     : [item.cover_image]
@@ -630,16 +765,42 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
   return (
     <View style={{ flex: 1, backgroundColor: "white" }}>
       <ScrollView showsVerticalScrollIndicator={false} style={{ backgroundColor: "white" }} contentContainerStyle={{ paddingBottom: 168, flexGrow: 1, backgroundColor: "white" }}>
-        <View style={{ width, height: 340, backgroundColor: "white" }}>
+        <View style={{ width, height: 340, backgroundColor: "#E7E0D6" }}>
           {photos.length ? (
-            <ScrollView horizontal pagingEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false}>
-              {photos.map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width, height: 340 }} resizeMode="cover" />)}
+            <ScrollView
+              horizontal
+              pagingEnabled
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={(event) => {
+                const next = Math.round(event.nativeEvent.contentOffset.x / Math.max(width, 1));
+                setPhotoIndex((current) => (current === next ? current : next));
+              }}
+              scrollEventThrottle={16}
+            >
+              {photos.map((uri, index) => (
+                <Pressable key={`${uri}-${index}`} onPress={() => { setPhotoIndex(index); setZoomOpen(true); }}>
+                  <Image source={{ uri }} style={{ width, height: 340 }} resizeMode="cover" />
+                </Pressable>
+              ))}
             </ScrollView>
           ) : null}
-          <View style={{ position: "absolute", top: insets.top + 8, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + 8, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <RoundIcon name="chevron-back" onPress={() => navigation.goBack()} />
             <RoundIcon name="share-social-outline" onPress={() => Share.share({ message: `${item.title}\n${place}\n${inr(item.price)}` })} />
           </View>
+          {photos.length > 1 ? (
+            <View pointerEvents="none" style={{ position: "absolute", bottom: 14, left: 0, right: 0, alignItems: "center" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 6 }}>
+                {photos.map((_, index) => <View key={index} style={{ width: index === photoIndex ? 18 : 7, height: 7, borderRadius: 4, backgroundColor: index === photoIndex ? "white" : "rgba(255,255,255,0.55)" }} />)}
+              </View>
+            </View>
+          ) : null}
+          {photos.length ? (
+            <Pressable onPress={() => setZoomOpen(true)} hitSlop={8} style={{ position: "absolute", right: 16, bottom: photos.length > 1 ? 44 : 16, width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(20,20,20,0.72)", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="expand-outline" size={18} color="white" />
+            </Pressable>
+          ) : null}
         </View>
         <View style={{ backgroundColor: "white", paddingHorizontal: 16, paddingTop: 20, flexGrow: 1 }}>
           {item.listing_label === "Premium" || item.is_premium ? (
@@ -733,6 +894,7 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
         </Pressable>
         </View>
       </View>
+      {zoomOpen && photos.length ? <PhotoZoom photos={photos} startIndex={photoIndex} onClose={() => setZoomOpen(false)} /> : null}
     </View>
   );
 }

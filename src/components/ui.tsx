@@ -83,13 +83,64 @@ export function ListSkeleton({ rows = 6 }: { rows?: number }) {
 
 export function DetailSkeleton() {
   const opacity = useSkeletonPulse();
+  const insets = useSafeAreaInsets();
+  const line = (width: number | `${number}%`, height = 12) => (
+    <Animated.View style={{ width, height, borderRadius: height / 2, backgroundColor: "#E4DDD2", opacity }} />
+  );
   return (
     <View style={{ flex: 1, backgroundColor: "white" }}>
-      <Animated.View style={{ height: 340, backgroundColor: "#E4DDD2", opacity }} />
-      <View style={{ padding: 16, gap: 10 }}>
-        <Animated.View style={{ height: 18, width: "70%", borderRadius: 8, backgroundColor: "#E4DDD2", opacity }} />
-        <Animated.View style={{ height: 14, width: "46%", borderRadius: 8, backgroundColor: "#E4DDD2", opacity }} />
-        <Animated.View style={{ height: 22, width: "36%", borderRadius: 8, backgroundColor: "#E4DDD2", opacity }} />
+      <View style={{ height: 340, backgroundColor: "#E7E0D6" }}>
+        <Animated.View style={{ flex: 1, backgroundColor: "#E4DDD2", opacity }} />
+        <View style={{ position: "absolute", top: insets.top + 8, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" }}>
+          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(20,20,20,0.28)" }} />
+          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(20,20,20,0.28)" }} />
+        </View>
+        <View style={{ position: "absolute", bottom: 14, left: 0, right: 0, alignItems: "center" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.28)", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 6 }}>
+            {[18, 7, 7].map((dot, index) => <View key={index} style={{ width: dot, height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.85)" }} />)}
+          </View>
+        </View>
+      </View>
+      <View style={{ paddingHorizontal: 16, paddingTop: 20 }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+          <View style={{ flex: 1, gap: 8 }}>
+            {line("86%", 22)}
+            {line("52%", 22)}
+          </View>
+          <Animated.View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#ffe8ea", opacity }} />
+        </View>
+        <View style={{ marginTop: 14 }}>{line("46%", 14)}</View>
+        <View style={{ marginTop: 16 }}>{line("38%", 28)}</View>
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 18 }}>
+          {[0, 1, 2, 3].map((key) => (
+            <View key={key} style={{ flex: 1, height: 78, borderRadius: 16, borderWidth: 1, borderColor: "#efeae3", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <Animated.View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#E4DDD2", opacity }} />
+              {line("60%", 10)}
+              {line("72%", 8)}
+            </View>
+          ))}
+        </View>
+        <View style={{ flexDirection: "row", marginTop: 22, borderBottomWidth: 1, borderBottomColor: "#eeeae4" }}>
+          {["Overview", "Amenities", "Location", "Documents"].map((label, index) => (
+            <View key={label} style={{ flex: 1, alignItems: "center", borderBottomWidth: 3, borderBottomColor: index === 0 ? "#d7e3db" : "transparent", paddingBottom: 10 }}>
+              {line(index === 0 ? "70%" : "62%", 12)}
+            </View>
+          ))}
+        </View>
+        <View style={{ marginTop: 16, gap: 8 }}>
+          {line("100%")}
+          {line("100%")}
+          {line("92%")}
+          {line("64%")}
+        </View>
+      </View>
+      <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 14, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: "white", borderTopWidth: 1, borderTopColor: "#f1eee8", gap: 8 }}>
+        <Animated.View style={{ height: 46, borderRadius: 12, backgroundColor: "#E4DDD2", opacity }} />
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Animated.View style={{ flex: 0.9, height: 48, borderRadius: 12, backgroundColor: "#E4DDD2", opacity }} />
+          <Animated.View style={{ flex: 1.25, height: 48, borderRadius: 12, backgroundColor: "#E4DDD2", opacity }} />
+          <Animated.View style={{ flex: 1.15, height: 48, borderRadius: 12, backgroundColor: "#E4DDD2", opacity }} />
+        </View>
       </View>
     </View>
   );

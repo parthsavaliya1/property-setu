@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { PropertyGridCard, propertyGridCardWidth } from "../components/PropertyGridCard";
+import { PropertyGridCard, propertyGridCardWidth, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, EmptyState, Field, ListSkeleton, PageHeader, PropertyGridSkeleton, styles } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
@@ -378,7 +378,6 @@ export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
   const { token } = useAuth();
   const { items, ready, toggle } = useFavorites();
   const loading = Boolean(token) && !ready;
-  const cardWidth = propertyGridCardWidth();
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
     <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 8 }}>
@@ -388,22 +387,17 @@ export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
       </Text>
     </View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-      {loading ? <PropertyGridSkeleton width={cardWidth} /> : null}
+      {loading ? <PropertyListSkeleton /> : null}
       {token && !loading && items.length === 0 ? <EmptyState kind="search" /> : null}
-      {!loading ? (
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-      {items.map((item) => (
-        <PropertyGridCard
+      {!loading ? items.map((item) => (
+        <PropertyListCard
           key={item.id}
           item={item}
-          width={cardWidth}
           saved
           onPress={() => onOpen(item.slug || item.id)}
           onSave={() => toggle(item)}
         />
-      ))}
-      </View>
-      ) : null}
+      )) : null}
     </ScrollView>
     </View>
   );
