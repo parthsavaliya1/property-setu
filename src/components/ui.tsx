@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useEffect, useRef } from "react";
-import { Animated, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors } from "../theme";
+import { buttonShadow, cardShadow, colors } from "../theme";
 
 const brandLogo = require("../../assets/center-logo.png");
 
@@ -41,17 +41,23 @@ function useSkeletonPulse() {
   return pulse;
 }
 
-export function SkeletonBlock({ width = "100%", height, radius = 10 }: { width?: number | `${number}%`; height: number; radius?: number }) {
+export function SkeletonBlock({ width = "100%", height = 16, radius = 10, fill = false }: { width?: number | `${number}%`; height?: number; radius?: number; fill?: boolean }) {
   const opacity = useSkeletonPulse();
-  return <Animated.View style={{ width, height, borderRadius: radius, backgroundColor: "#E4DDD2", opacity }} />;
+  return <Animated.View style={{ width, alignSelf: "stretch", borderRadius: radius, backgroundColor: "#E4DDD2", opacity, ...(fill ? { flex: 1 } : { height }) }} />;
 }
 
-export function PropertyGridSkeleton({ width, count = 4 }: { width: number; count?: number }) {
+function slotsForScreen(itemHeight: number, columns: number) {
+  const rows = Math.max(3, Math.ceil(Dimensions.get("window").height / itemHeight));
+  return rows * columns;
+}
+
+export function PropertyGridSkeleton({ width, count }: { width: number; count?: number }) {
   const opacity = useSkeletonPulse();
+  const total = count ?? slotsForScreen(200, 2);
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-      {Array.from({ length: count }, (_, index) => (
-        <View key={index} style={{ width, backgroundColor: "white", borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: "#EFE8DE" }}>
+    <View style={{ width: "100%", alignSelf: "stretch", flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+      {Array.from({ length: total }, (_, index) => (
+        <View key={index} style={{ width, flexGrow: 1, flexShrink: 1, flexBasis: width, maxWidth: "100%", backgroundColor: colors.card, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: colors.line }}>
           <Animated.View style={{ height: 120, backgroundColor: "#E4DDD2", opacity }} />
           <View style={{ padding: 10, gap: 8 }}>
             <Animated.View style={{ height: 12, width: "78%", borderRadius: 6, backgroundColor: "#E4DDD2", opacity }} />
@@ -64,12 +70,13 @@ export function PropertyGridSkeleton({ width, count = 4 }: { width: number; coun
   );
 }
 
-export function ListSkeleton({ rows = 6 }: { rows?: number }) {
+export function ListSkeleton({ rows }: { rows?: number }) {
   const opacity = useSkeletonPulse();
+  const total = rows ?? slotsForScreen(76, 1);
   return (
-    <View style={{ gap: 12 }}>
-      {Array.from({ length: rows }, (_, index) => (
-        <View key={index} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "white", borderRadius: 14, padding: 12 }}>
+    <View style={{ width: "100%", alignSelf: "stretch", gap: 12 }}>
+      {Array.from({ length: total }, (_, index) => (
+        <View key={index} style={{ width: "100%", alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "white", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.line }}>
           <Animated.View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#E4DDD2", opacity }} />
           <View style={{ flex: 1, gap: 8 }}>
             <Animated.View style={{ height: 12, width: "62%", borderRadius: 6, backgroundColor: "#E4DDD2", opacity }} />
@@ -88,7 +95,7 @@ export function DetailSkeleton() {
     <Animated.View style={{ width, height, borderRadius: height / 2, backgroundColor: "#E4DDD2", opacity }} />
   );
   return (
-    <View style={{ flex: 1, backgroundColor: "white" }}>
+    <View style={{ flex: 1, backgroundColor: colors.page }}>
       <View style={{ height: 340, backgroundColor: "#E7E0D6" }}>
         <Animated.View style={{ flex: 1, backgroundColor: "#E4DDD2", opacity }} />
         <View style={{ position: "absolute", top: insets.top + 8, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" }}>
@@ -101,7 +108,7 @@ export function DetailSkeleton() {
           </View>
         </View>
       </View>
-      <View style={{ paddingHorizontal: 16, paddingTop: 20 }}>
+      <View style={{ flexGrow: 1, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 180 }}>
         <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
           <View style={{ flex: 1, gap: 8 }}>
             {line("86%", 22)}
@@ -122,7 +129,7 @@ export function DetailSkeleton() {
         </View>
         <View style={{ flexDirection: "row", marginTop: 22, borderBottomWidth: 1, borderBottomColor: "#eeeae4" }}>
           {["Overview", "Amenities", "Location", "Documents"].map((label, index) => (
-            <View key={label} style={{ flex: 1, alignItems: "center", borderBottomWidth: 3, borderBottomColor: index === 0 ? "#d7e3db" : "transparent", paddingBottom: 10 }}>
+            <View key={label} style={{ flex: 1, alignItems: "center", borderBottomWidth: 3, borderBottomColor: index === 0 ? colors.primaryLight : "transparent", paddingBottom: 10 }}>
               {line(index === 0 ? "70%" : "62%", 12)}
             </View>
           ))}
@@ -150,28 +157,45 @@ export function EmptyState({ kind }: { kind: "active" | "search" }) {
   const search = kind === "search";
   return (
     <View style={{ flex: 1, minHeight: 280, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
-      <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: search ? "#E7F4EC" : "#F6EFE6", alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name={search ? "search-outline" : "home-outline"} size={36} color={search ? "#146c36" : "#8C5A3C"} />
+      <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+        <Ionicons name={search ? "search-outline" : "home-outline"} size={36} color={colors.primary} />
       </View>
-      <Text style={{ marginTop: 16, fontSize: 18, fontWeight: "800", color: "#2C2825", textAlign: "center" }}>{search ? "No record found" : "No property active"}</Text>
-      <Text style={{ marginTop: 6, color: "#8A8178", textAlign: "center", lineHeight: 20 }}>{search ? "Try another city, area, or filter." : "There are no live listings right now."}</Text>
+      <Text style={{ marginTop: 16, fontSize: 18, fontWeight: "800", color: colors.ink, textAlign: "center" }}>{search ? "No record found" : "No property active"}</Text>
+      <Text style={{ marginTop: 6, color: colors.muted, textAlign: "center", lineHeight: 20 }}>{search ? "Try another city, area, or filter." : "There are no live listings right now."}</Text>
     </View>
   );
 }
 
 export function Button({ title, onPress, disabled }: { title: string; onPress: () => void; disabled?: boolean }) {
   return (
-    <Pressable style={[styles.button, disabled && styles.disabled]} onPress={onPress} disabled={disabled}>
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [styles.button, pressed && !disabled && styles.buttonPressed, disabled && styles.disabled]}
+    >
       <Text style={styles.buttonText}>{title}</Text>
     </Pressable>
   );
 }
 
 export function Field({ label, ...props }: { label?: string } & TextInputProps) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.field}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TextInput placeholderTextColor={colors.muted} style={styles.input} {...props} />
+      {label ? <Text style={[styles.label, focused && { color: colors.primary }]}>{label}</Text> : null}
+      <TextInput
+        placeholderTextColor={colors.faint}
+        {...props}
+        onFocus={(event) => {
+          setFocused(true);
+          props.onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          props.onBlur?.(event);
+        }}
+        style={[styles.input, focused && { borderColor: colors.primary }, props.style]}
+      />
     </View>
   );
 }
@@ -180,7 +204,7 @@ export function PageHeader({ title, onBack }: { title: string; onBack?: () => vo
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 14, backgroundColor: colors.page, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center" }}>
+    <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 14, backgroundColor: colors.page, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center" }}>
       <Pressable
         onPress={onBack ?? (() => navigation.goBack())}
         hitSlop={8}
@@ -188,7 +212,7 @@ export function PageHeader({ title, onBack }: { title: string; onBack?: () => vo
       >
         <Ionicons name="arrow-back" size={24} color={colors.ink} />
       </Pressable>
-      <Text style={{ flex: 1, marginLeft: 12, fontSize: 20, fontWeight: "800", color: "#1A1A1A" }} numberOfLines={1}>{title}</Text>
+      <Text style={{ flex: 1, marginLeft: 12, fontSize: 20, fontWeight: "800", color: colors.ink }} numberOfLines={1}>{title}</Text>
       <View style={{ width: 46 }} />
     </View>
   );
@@ -198,8 +222,8 @@ export function ListingLabel({ label }: { label?: string | null }) {
   if (!label) return null;
   const premium = label === "Premium";
   return (
-    <View style={{ position: "absolute", top: 8, left: 8, backgroundColor: premium ? "#f8e7c0" : "#e7f4ec", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
-      <Text style={{ color: premium ? "#8a5a12" : "#146c36", fontSize: 11, fontWeight: "800" }}>{label}</Text>
+    <View style={{ position: "absolute", top: 8, left: 8, backgroundColor: premium ? "#f8e7c0" : colors.primarySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+      <Text style={{ color: premium ? "#8a5a12" : colors.primary, fontSize: 11, fontWeight: "800" }}>{label}</Text>
     </View>
   );
 }
@@ -220,20 +244,21 @@ export const styles = StyleSheet.create({
   kicker: { color: "rgba(255,255,255,0.75)", fontSize: 13 },
   headerTitle: { color: "white", fontSize: 28, fontWeight: "800" },
   headerSub: { color: "rgba(255,255,255,0.8)", marginTop: 4 },
-  body: { padding: 16, gap: 12 },
-  button: { backgroundColor: colors.green, borderRadius: 14, paddingVertical: 14, alignItems: "center" },
-  buttonText: { color: "white", fontWeight: "800" },
+  body: { padding: 20, gap: 12 },
+  button: { backgroundColor: colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", ...buttonShadow },
+  buttonPressed: { backgroundColor: colors.primaryDark },
+  buttonText: { color: colors.white, fontWeight: "700", fontSize: 16 },
   disabled: { opacity: 0.5 },
   field: { gap: 6 },
-  label: { color: colors.muted, fontWeight: "700", fontSize: 13 },
-  input: { backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink },
-  card: { backgroundColor: "white", borderRadius: 18, overflow: "hidden", marginBottom: 12 },
-  cardBody: { padding: 12 },
-  price: { color: colors.green, fontWeight: "800", fontSize: 16 },
-  title: { color: colors.ink, fontWeight: "800", fontSize: 16 },
+  label: { color: colors.muted, fontWeight: "600", fontSize: 13 },
+  input: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, height: 52, color: colors.ink, fontSize: 15 },
+  card: { backgroundColor: colors.card, borderRadius: 20, overflow: "hidden", marginBottom: 12, borderWidth: 1, borderColor: colors.line, ...cardShadow },
+  cardBody: { padding: 16 },
+  price: { color: colors.primary, fontWeight: "800", fontSize: 16 },
+  title: { color: colors.ink, fontWeight: "600", fontSize: 16 },
   meta: { color: colors.muted, marginTop: 4 },
-  error: { backgroundColor: "#fdecea", color: colors.danger, padding: 10, borderRadius: 12 },
-  ok: { backgroundColor: colors.mint, color: colors.green, padding: 10, borderRadius: 12 },
+  error: { backgroundColor: "#F8E6E3", color: colors.danger, padding: 10, borderRadius: 12 },
+  ok: { backgroundColor: "#E7F0EA", color: colors.success, padding: 10, borderRadius: 12 },
   chipRow: { flexDirection: "row", gap: 8, marginTop: 12 },
   chip: { backgroundColor: "rgba(255,255,255,0.14)", color: "white", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, overflow: "hidden", fontWeight: "700" },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },

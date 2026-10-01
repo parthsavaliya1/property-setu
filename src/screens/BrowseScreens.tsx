@@ -8,10 +8,10 @@ import { PropertyMap } from "../components/PropertyMap";
 import { DetailSkeleton, EmptyState, PageHeader, PropertyGridSkeleton, SkeletonBlock, styles } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { useFavorites } from "../context/FavoritesContext";
-import { api, cityName, inr, listingLabel, sortForDashboard, sortForSearch } from "../lib/api";
+import { api, cityName, inr, listingLabel, sortForSearch } from "../lib/api";
 import { readCurrentPlace } from "../lib/location";
 import { useRequireLogin } from "../context/LoginGate";
-import { colors } from "../theme";
+import { buttonShadow, cardShadow, colors } from "../theme";
 import { deviceType } from "../lib/supabase";
 import type { PropertyCard, PropertyDetail } from "../types/database";
 
@@ -19,7 +19,7 @@ function Card({ item, onPress }: { item: PropertyCard; onPress: () => void }) {
   const place = [item.locality, item.city].filter(Boolean).join(", ") || "Location not added";
   return (
     <Pressable style={styles.card} onPress={onPress}>
-      {item.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: 140 }} resizeMode="cover" /> : <View style={{ height: 120, backgroundColor: "#d7e3db" }} />}
+      {item.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: 140 }} resizeMode="cover" /> : <View style={{ height: 120, backgroundColor: colors.secondary }} />}
       <View style={styles.cardBody}>
         <Text style={styles.price}>{inr(item.price)}</Text>
         <Text style={styles.title}>{item.title}</Text>
@@ -46,15 +46,26 @@ const kindChips = [
 ];
 
 const categories = [
-  { label: "Buy", query: "listing_type=sale", bg: "#fde8e6", color: "#e57373", icon: "home" as const },
-  { label: "Rent", query: "listing_type=rent", bg: "#e8f1ff", color: "#5b8def", icon: "home-city" as const },
-  { label: "Plot", query: "category=residential-plot", bg: "#e7f6ec", color: "#67b98b", icon: "checkbox-blank-outline" as const },
-  { label: "Land", query: "category=agricultural-land", bg: "#fff0e6", color: "#e0914a", icon: "upload" as const },
-  { label: "House", query: "category=house", bg: "#e8f1ff", color: "#3b82f6", icon: "home-outline" as const },
-  { label: "Apartment", query: "category=apartment", bg: "#f3e8ff", color: "#8b6bb8", icon: "office-building" as const },
-  { label: "Villa", query: "category=villa", bg: "#fff4e5", color: "#d4924a", icon: "home-variant" as const },
-  { label: "Shop", query: "category=shop", bg: "#f3f4f6", color: "#8b9098", icon: "storefront-outline" as const },
+  { label: "Buy", query: "listing_type=sale", bg: "#F3E4DB", color: "#B56A45", icon: "home" as const },
+  { label: "Rent", query: "listing_type=rent", bg: "#F1EAE2", color: "#8F4F32", icon: "home-city" as const },
+  { label: "Plot", query: "category=residential-plot", bg: "#F8EEDD", color: "#C88A3D", icon: "checkbox-blank-outline" as const },
+  { label: "Land", query: "category=agricultural-land", bg: "#F3E4DB", color: "#8F4F32", icon: "upload" as const },
+  { label: "House", query: "category=house", bg: "#F1EAE2", color: "#B56A45", icon: "home-outline" as const },
+  { label: "Apartment", query: "category=apartment", bg: "#F7F3EC", color: "#6F6A64", icon: "office-building" as const },
+  { label: "Villa", query: "category=villa", bg: "#F8EEDD", color: "#C88A3D", icon: "home-variant" as const },
+  { label: "Shop", query: "category=shop", bg: "#F1EAE2", color: "#6F6A64", icon: "storefront-outline" as const },
 ];
+
+function shuffleList<T>(list: T[]) {
+  const copy = [...list];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    const current = copy[index];
+    copy[index] = copy[swap] as T;
+    copy[swap] = current as T;
+  }
+  return copy;
+}
 
 export function HomeScreen({
   onOpen,
@@ -76,8 +87,7 @@ export function HomeScreen({
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [unread, setUnread] = useState(0);
-  const accent = "#8C5A3C";
-  const cardWidth = (Dimensions.get("window").width - 16 * 2 - 12) / 2;
+  const cardWidth = (Dimensions.get("window").width - 20 * 2 - 12) / 2;
 
   const profileCity = cityName(me?.profile?.city);
   const [placeCity, setPlaceCity] = useState("");
@@ -106,10 +116,10 @@ export function HomeScreen({
     if (!located) return;
     let active = true;
     setLoading(true);
-    const params = new URLSearchParams({ limit: "24" });
+    const params = new URLSearchParams({ limit: "50" });
     if (city) params.set("prefer_city", city);
     api.properties(`?${params}`, token).then((rows) => {
-      if (active) setItems(sortForDashboard(rows, city));
+      if (active) setItems(rows);
     }).catch((err) => {
       if (active) setError(err.message);
     }).finally(() => {
@@ -150,8 +160,25 @@ export function HomeScreen({
     await toggle(item);
   }
 
-  const premiumItems = items.filter((item) => item.is_premium || item.listing_label === "Premium");
-  const simpleItems = items.filter((item) => !item.is_premium && item.listing_label !== "Premium");
+  const [premiumItems, setPremiumItems] = useState<PropertyCard[]>([]);
+  const [simpleItems, setSimpleItems] = useState<PropertyCard[]>([]);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  const arrangeHome = useCallback((source: PropertyCard[]) => {
+    const premium = shuffleList(source.filter((item) => item.is_premium || item.listing_label === "Premium"));
+    const simple = shuffleList(source.filter((item) => !item.is_premium && item.listing_label !== "Premium")).slice(0, 10);
+    setPremiumItems(premium);
+    setSimpleItems(simple);
+  }, []);
+
+  useEffect(() => {
+    arrangeHome(items);
+  }, [items, arrangeHome]);
+
+  useFocusEffect(useCallback(() => {
+    arrangeHome(itemsRef.current);
+  }, [arrangeHome]));
   const page = colors.page;
 
   function propertyCard(item: PropertyCard, width: number) {
@@ -169,78 +196,78 @@ export function HomeScreen({
 
   return (
     <View style={{ flex: 1, backgroundColor: page }}>
-    <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 18, paddingBottom: 8, backgroundColor: page }}>
+    <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 8, backgroundColor: page }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
         <Pressable onPress={onOpenMenu} hitSlop={8}>
-          <Image source={require("../../assets/splash.png")} style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: "#E7E0D6" }} resizeMode="cover" />
+          <Image source={require("../../assets/splash.png")} style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: colors.line }} resizeMode="cover" />
         </Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ fontSize: 22, fontWeight: "800", color: "#0A0E0B" }}>{city || "Finding city"}</Text>
-          <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 13, fontWeight: "600", color: "#8A8178" }}>Find your property</Text>
+          <Text numberOfLines={1} style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>{city || "Finding city"}</Text>
+          <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 13, color: colors.muted }}>Find your property</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Pressable onPress={openNotifications} hitSlop={8} style={{ padding: 4 }}>
-            <Ionicons name="notifications-outline" size={26} color="#2C2825" />
+            <Ionicons name="notifications-outline" size={26} color={colors.ink} />
             {unread > 0 ? (
-              <View style={{ position: "absolute", top: 0, right: 0, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: "#D32F2F", borderWidth: 1.5, borderColor: page, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }}>
+              <View style={{ position: "absolute", top: 0, right: 0, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.danger, borderWidth: 1.5, borderColor: page, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }}>
                 <Text style={{ color: "white", fontSize: 10, fontWeight: "900" }}>{unread > 99 ? "99+" : unread}</Text>
               </View>
             ) : null}
           </Pressable>
-          <View style={{ width: 40, height: 40, borderRadius: 20, overflow: "hidden", backgroundColor: "#E7D9C8", alignItems: "center", justifyContent: "center" }}>
-            {me?.profile?.avatar_url ? <Image source={{ uri: me.profile.avatar_url }} style={{ width: 40, height: 40 }} /> : <Ionicons name="person" size={18} color="#8A8178" />}
+          <View style={{ width: 40, height: 40, borderRadius: 20, overflow: "hidden", backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }}>
+            {me?.profile?.avatar_url ? <Image source={{ uri: me.profile.avatar_url }} style={{ width: 40, height: 40 }} /> : <Ionicons name="person" size={18} color={colors.muted} />}
           </View>
         </View>
       </View>
-      <View style={{ marginTop: 14, backgroundColor: "white", borderRadius: 16, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, height: 48, borderWidth: 1, borderColor: "#E7E0D6" }}>
-        <Ionicons name="search" size={18} color="#146c36" />
-        <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => onSearch(query || "all")} placeholder="Search house, plot, land..." placeholderTextColor="#A39B92" style={{ flex: 1, marginLeft: 8, color: "#2C2825", fontSize: 14 }} />
+      <View style={{ marginTop: 14, backgroundColor: colors.card, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, height: 52, borderWidth: 1, borderColor: colors.line }}>
+        <Ionicons name="search" size={18} color={colors.primary} />
+        <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => onSearch(query || "all")} placeholder="Search house, plot, land..." placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
       </View>
     </View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 28 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
-      <View style={{ marginHorizontal: 16, marginTop: 14, backgroundColor: "white", borderRadius: 20, paddingTop: 16, paddingBottom: 4, borderWidth: 1, borderColor: "#EFE8DE" }}>
+      <View style={{ marginHorizontal: 20, marginTop: 24, backgroundColor: colors.card, borderRadius: 20, paddingTop: 16, paddingBottom: 4, borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {categories.map((item) => (
             <Pressable key={item.label} onPress={() => onSearch(item.query)} style={{ width: "25%", alignItems: "center", marginBottom: 14 }}>
               <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: item.bg, alignItems: "center", justifyContent: "center" }}>
                 <MaterialCommunityIcons name={item.icon} size={26} color={item.color} />
               </View>
-              <Text style={{ marginTop: 6, fontSize: 12, color: "#3d3d3d", fontWeight: "600" }}>{item.label}</Text>
+              <Text style={{ marginTop: 6, fontSize: 12, color: colors.ink, fontWeight: "600" }}>{item.label}</Text>
             </Pressable>
           ))}
         </View>
       </View>
-      <Pressable onPress={() => onSearch("all")} style={{ marginHorizontal: 16, marginTop: 14, height: 118, borderRadius: 16, overflow: "hidden" }}>
+      <Pressable onPress={() => onSearch("all")} style={{ marginHorizontal: 20, marginTop: 24, height: 118, borderRadius: 20, overflow: "hidden" }}>
         <Image source={require("../../assets/home-banner.jpg")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
         <View style={{ position: "absolute", left: 14, top: 0, bottom: 0, width: "48%", justifyContent: "center" }}>
           <Text style={{ color: "white", fontSize: 16, lineHeight: 20, fontWeight: "800" }}>Find Your Dream Home</Text>
-          <Text style={{ color: "rgba(255,255,255,0.9)", marginTop: 2, fontSize: 12 }}>Verified Properties</Text>
+          <Text style={{ color: "rgba(255,255,255,0.9)", marginTop: 2, fontSize: 12 }}>Homes, plots, and land</Text>
           <View style={{ alignSelf: "flex-start", marginTop: 8, backgroundColor: "white", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 }}>
-            <Text style={{ color: "#146c36", fontWeight: "700", fontSize: 12 }}>Explore Now</Text>
+            <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>Explore Now</Text>
           </View>
         </View>
       </Pressable>
       {error ? <Text style={[styles.error, { margin: 16 }]}>{error}</Text> : null}
-      {loading ? <View style={{ paddingHorizontal: 16, marginTop: 20 }}><PropertyGridSkeleton width={cardWidth} /></View> : null}
+      {loading ? <View style={{ width: "100%", paddingHorizontal: 20, marginTop: 24 }}><PropertyGridSkeleton width={cardWidth} /></View> : null}
       {!loading && premiumItems.length > 0 ? (
         <>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 16, marginTop: 20, marginBottom: 12 }}>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: "#2C2825" }}>Premium Properties</Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 20, marginTop: 28, marginBottom: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>Premium Properties</Text>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
-            {premiumItems.map((item) => propertyCard(item, 220))}
+          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
+            {premiumItems.map((item) => propertyCard(item, cardWidth))}
           </ScrollView>
         </>
       ) : null}
       {!loading ? (
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 16, marginTop: 20, marginBottom: 12 }}>
-        <Text style={{ fontSize: 18, fontWeight: "800", color: "#2C2825" }}>Simple Properties</Text>
-        <Pressable onPress={() => onSearch("all")}><Text style={{ color: accent, fontWeight: "700" }}>See All</Text></Pressable>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 20, marginTop: 28, marginBottom: 12 }}>
+        <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>Simple Properties</Text>
+        <Pressable onPress={() => onSearch("all")}><Text style={{ color: colors.primary, fontWeight: "700" }}>See All</Text></Pressable>
       </View>
       ) : null}
       {!loading && simpleItems.length === 0 && premiumItems.length === 0 ? <EmptyState kind="active" /> : null}
       {!loading && simpleItems.length > 0 ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, gap: 12 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 20, gap: 12 }}>
           {simpleItems.map((item) => propertyCard(item, cardWidth))}
         </View>
       ) : null}
@@ -263,7 +290,6 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   const [propertyType, setPropertyType] = useState("");
   const [price, setPrice] = useState("");
   const [bedrooms, setBedrooms] = useState("");
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [withPhotos, setWithPhotos] = useState(false);
   const [sort, setSort] = useState("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -336,7 +362,6 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
 
   const shown = sortForSearch(
     [...items]
-      .filter((item) => !verifiedOnly || item.verification_status === "verified" || item.owner_verified)
       .filter((item) => !withPhotos || Boolean(item.cover_image)),
     nearCity || q,
     sort,
@@ -373,7 +398,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     if (!query) return !listing && !category;
     return query === `listing_type=${listing}` || (query.startsWith("category=") && query.slice("category=".length) === category && !listing);
   };
-  const filterCount = [listing || category, propertyType, price, bedrooms, verifiedOnly, withPhotos, sort !== "newest"].filter(Boolean).length;
+  const filterCount = [listing || category, propertyType, price, bedrooms, withPhotos, sort !== "newest"].filter(Boolean).length;
 
   function clearFilters() {
     setListing("");
@@ -381,37 +406,36 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     setPropertyType("");
     setPrice("");
     setBedrooms("");
-    setVerifiedOnly(false);
     setWithPhotos(false);
     setSort("newest");
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#F7F4EE" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 16, paddingBottom: 10, backgroundColor: "#F7F4EE", borderBottomWidth: 1, borderBottomColor: "#E8E4DC" }}>
-        <Text style={{ fontSize: 22, fontWeight: "800", color: "#0A0E0B" }}>Search</Text>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 10, backgroundColor: colors.page, borderBottomWidth: 1, borderBottomColor: colors.line }}>
+        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>Search</Text>
         <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View style={{ flex: 1, borderRadius: 12, backgroundColor: "white", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, minHeight: 44, borderWidth: 1, borderColor: "#E8E4DC" }}>
-            <Ionicons name="search" size={18} color="#8E8E8E" />
-            <TextInput value={q} onChangeText={setQ} placeholder="City, area, or property name" placeholderTextColor="#8E8E8E" style={{ flex: 1, marginLeft: 8, color: "#262626", fontSize: 15, paddingVertical: 8 }} />
+          <View style={{ flex: 1, borderRadius: 14, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, minHeight: 52, borderWidth: 1, borderColor: colors.line }}>
+            <Ionicons name="search" size={18} color={colors.faint} />
+            <TextInput value={q} onChangeText={setQ} placeholder="City, area, or property name" placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 15, paddingVertical: 8 }} />
             {q ? (
               <Pressable onPress={() => setQ("")} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color="#8E8E8E" />
+                <Ionicons name="close-circle" size={18} color={colors.faint} />
               </Pressable>
             ) : null}
           </View>
-          <Pressable onPress={() => setFiltersOpen(true)} style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: "white", borderWidth: 1, borderColor: filterCount ? "#2E7D32" : "#E8E4DC", alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="options-outline" size={22} color={filterCount ? "#2E7D32" : "#262626"} />
-            {filterCount ? <View style={{ position: "absolute", top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: "#2E7D32", alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}><Text style={{ color: "white", fontSize: 10, fontWeight: "800" }}>{filterCount}</Text></View> : null}
+          <Pressable onPress={() => setFiltersOpen(true)} style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: filterCount ? colors.primary : colors.line, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="options-outline" size={22} color={filterCount ? colors.primary : colors.ink} />
+            {filterCount ? <View style={{ position: "absolute", top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}><Text style={{ color: colors.white, fontSize: 10, fontWeight: "800" }}>{filterCount}</Text></View> : null}
           </Pressable>
         </View>
       </View>
-      {!loading ? <Text style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, color: "#8A8178", fontSize: 13, fontWeight: "600" }}>{shown.length} {shown.length === 1 ? "result" : "results"}{q.trim() ? ` • ${q.trim()}` : ""}</Text> : null}
+      {!loading ? <Text style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, color: colors.muted, fontSize: 13 }}>{shown.length} {shown.length === 1 ? "result" : "results"}{q.trim() ? ` • ${q.trim()}` : ""}</Text> : null}
       <FlatList
         style={{ flex: 1 }}
         data={loading ? [] : shown}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingBottom: 28, paddingTop: 8 }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: 28, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <PropertyListCard
@@ -426,14 +450,14 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
       <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" }}>
           <Pressable style={{ flex: 1 }} onPress={() => setFiltersOpen(false)} />
-          <View style={{ maxHeight: "82%", backgroundColor: "#F7F4EE", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 18 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10 }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: "#0A0E0B" }}>Filters</Text>
-              <Pressable onPress={clearFilters} hitSlop={8}><Text style={{ color: "#2E7D32", fontWeight: "800" }}>Clear</Text></Pressable>
+          <View style={{ maxHeight: "82%", backgroundColor: colors.page, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 18 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 10 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>Filters</Text>
+              <Pressable onPress={clearFilters} hitSlop={8}><Text style={{ color: colors.primary, fontWeight: "700" }}>Clear</Text></Pressable>
             </View>
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, gap: 14 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12, gap: 24 }} showsVerticalScrollIndicator={false}>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "800", color: "#374151" }}>Looking for</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>Looking for</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {typeChips.map((chip) => (
                     <LeVechChip key={chip.label} label={chip.label} active={tabActive(chip.query)} onPress={() => selectTab(chip.query)} />
@@ -441,7 +465,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "800", color: "#374151" }}>Type</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>Type</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {[{ id: "", label: "Any type" }, ...propertyTypes].map((option) => (
                     <LeVechChip key={option.id || "type"} label={option.label} active={propertyType === option.id} onPress={() => setPropertyType(option.id)} />
@@ -449,7 +473,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "800", color: "#374151" }}>Price</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>Price</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {[{ id: "", label: "Any price" }, ...priceRanges].map((option) => (
                     <LeVechChip key={option.id || "price"} label={option.label} active={price === option.id} onPress={() => setPrice(option.id)} />
@@ -457,7 +481,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "800", color: "#374151" }}>BHK</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>BHK</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {[{ id: "", label: "Any" }, { id: "1", label: "1 BHK" }, { id: "2", label: "2 BHK" }, { id: "3", label: "3 BHK" }, { id: "4", label: "4+ BHK" }].map((option) => (
                     <LeVechChip key={option.id || "beds"} label={option.label} active={bedrooms === option.id} onPress={() => setBedrooms(option.id)} />
@@ -465,14 +489,13 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "800", color: "#374151" }}>More</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>More</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  <LeVechChip label="Verified" active={verifiedOnly} onPress={() => setVerifiedOnly((value) => !value)} />
                   <LeVechChip label="Photos" active={withPhotos} onPress={() => setWithPhotos((value) => !value)} />
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "800", color: "#374151" }}>Sort</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>Sort</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {[{ id: "newest", label: "Newest" }, { id: "low", label: "Price: Low to high" }, { id: "high", label: "Price: High to low" }].map((option) => (
                     <LeVechChip key={option.id} label={option.label} active={sort === option.id} onPress={() => setSort(option.id)} />
@@ -480,8 +503,8 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
                 </View>
               </View>
             </ScrollView>
-            <Pressable onPress={() => setFiltersOpen(false)} style={{ marginHorizontal: 16, marginTop: 4, backgroundColor: "#2E7D32", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}>
-              <Text style={{ color: "white", fontWeight: "800" }}>Show properties</Text>
+            <Pressable onPress={() => setFiltersOpen(false)} style={({ pressed }) => ({ marginHorizontal: 20, marginTop: 4, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
+              <Text style={{ color: colors.white, fontWeight: "700" }}>Show properties</Text>
             </Pressable>
           </View>
         </View>
@@ -516,12 +539,12 @@ function LeVechChip({ label, active, onPress }: { label: string; active?: boolea
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 20,
-        backgroundColor: active ? "#E8F5E9" : "white",
+        backgroundColor: active ? colors.primary : colors.card,
         borderWidth: 1,
-        borderColor: active ? "#2E7D32" : "#C8E6C9",
+        borderColor: active ? colors.primary : colors.line,
       }}
     >
-      <Text style={{ color: active ? "#2E7D32" : "#374151", fontSize: 13, fontWeight: active ? "800" : "600" }} numberOfLines={1}>{label}</Text>
+      <Text style={{ color: active ? colors.white : colors.muted, fontSize: 13, fontWeight: active ? "700" : "600" }} numberOfLines={1}>{label}</Text>
     </Pressable>
   );
 }
@@ -546,7 +569,7 @@ export function MapScreen({ onOpen, showBack }: { onOpen: (id: string) => void; 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       {showBack ? <PageHeader title="Map" /> : null}
-      {loading ? <View style={{ flex: 1, margin: 16 }}><SkeletonBlock height={420} radius={16} /></View> : <PropertyMap pins={pins} onOpen={onOpen} />}
+      {loading ? <View style={{ flex: 1, margin: 16 }}><SkeletonBlock fill radius={16} /></View> : <PropertyMap pins={pins} onOpen={onOpen} />}
     </View>
   );
 }
@@ -763,8 +786,8 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: "white" }}>
-      <ScrollView showsVerticalScrollIndicator={false} style={{ backgroundColor: "white" }} contentContainerStyle={{ paddingBottom: 168, flexGrow: 1, backgroundColor: "white" }}>
+    <View style={{ flex: 1, backgroundColor: colors.page }}>
+      <ScrollView showsVerticalScrollIndicator={false} style={{ backgroundColor: colors.page }} contentContainerStyle={{ paddingBottom: 168, flexGrow: 1, backgroundColor: colors.page }}>
         <View style={{ width, height: 340, backgroundColor: "#E7E0D6" }}>
           {photos.length ? (
             <ScrollView
@@ -802,25 +825,25 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
             </Pressable>
           ) : null}
         </View>
-        <View style={{ backgroundColor: "white", paddingHorizontal: 16, paddingTop: 20, flexGrow: 1 }}>
+        <View style={{ backgroundColor: colors.page, paddingHorizontal: 20, paddingTop: 20, flexGrow: 1 }}>
           {item.listing_label === "Premium" || item.is_premium ? (
             <View style={{ alignSelf: "flex-start", backgroundColor: "#f8e7c0", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 8 }}>
               <Text style={{ color: "#8a5a12", fontSize: 11, fontWeight: "800" }}>Premium</Text>
             </View>
           ) : null}
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-            <Text style={{ flex: 1, fontSize: 22, lineHeight: 28, fontWeight: "800", color: "#171717" }}>{item.title}</Text>
-            <Pressable onPress={save} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#ffe8ea", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name={liked ? "heart" : "heart-outline"} size={20} color="#ef4444" />
+            <Text style={{ flex: 1, fontSize: 22, lineHeight: 28, fontWeight: "600", color: colors.ink }}>{item.title}</Text>
+            <Pressable onPress={save} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: liked ? colors.primarySoft : colors.card, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name={liked ? "heart" : "heart-outline"} size={20} color={liked ? colors.heart : colors.faint} />
             </Pressable>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
-            <Ionicons name="location-sharp" size={15} color="#146c36" />
-            <Text style={{ flex: 1, color: "#6b7280", fontSize: 14 }}>{place}</Text>
+            <Ionicons name="location-sharp" size={15} color={colors.muted} />
+            <Text style={{ flex: 1, color: colors.muted, fontSize: 14 }}>{place}</Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14 }}>
-            <Text style={{ fontSize: 28, fontWeight: "800", color: "#171717" }}>{inr(item.price)}</Text>
-            {item.is_price_negotiable ? <View style={{ backgroundColor: "#e7f6ec", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: "#146c36", fontWeight: "700", fontSize: 13 }}>Negotiable</Text></View> : null}
+            <Text style={{ fontSize: 28, fontWeight: "800", color: colors.primary }}>{inr(item.price)}</Text>
+            {item.is_price_negotiable ? <View style={{ backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: colors.white, fontWeight: "700", fontSize: 13 }}>Negotiable</Text></View> : null}
           </View>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 18 }}>
             <Fact icon="bed-outline" value={String(item.bedrooms ?? "—")} label="Bedrooms" />
@@ -828,13 +851,13 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
             <Fact icon="car-outline" value={item.parking_spaces != null ? String(item.parking_spaces) : "—"} label="Parking" />
             <Fact value={area} label="Sq.ft" />
           </View>
-          <View style={{ flexDirection: "row", marginTop: 22, borderBottomWidth: 1, borderBottomColor: "#eeeae4" }}>
+          <View style={{ flexDirection: "row", marginTop: 22, borderBottomWidth: 1, borderBottomColor: colors.lineSoft }}>
             {tabs.map((entry) => {
               const active = tab === entry.id;
               return (
                 <Pressable key={entry.id} onPress={() => setTab(entry.id)} style={{ flex: 1, alignItems: "center" }}>
-                  <View style={{ borderBottomWidth: 3, borderBottomColor: active ? "#146c36" : "transparent", paddingBottom: 10, marginBottom: -1 }}>
-                    <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? "#146c36" : "#9aa19c" }}>{entry.label}</Text>
+                  <View style={{ borderBottomWidth: 3, borderBottomColor: active ? colors.primary : "transparent", paddingBottom: 10, marginBottom: -1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? colors.primary : colors.faint }}>{entry.label}</Text>
                   </View>
                 </Pressable>
               );
@@ -843,54 +866,54 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
           <View style={{ marginTop: 16, minHeight: 88 }}>
             {tab === "overview" ? (
               <View>
-                <Text style={{ color: "#3f3f46", fontSize: 15, lineHeight: 23 }} numberOfLines={expanded ? undefined : 4}>{description}</Text>
-                {description.length > 90 ? <Pressable onPress={() => setExpanded((value) => !value)}><Text style={{ color: "#146c36", fontWeight: "800", marginTop: 10 }}>{expanded ? "Show Less" : "Read More"}</Text></Pressable> : null}
+                <Text style={{ color: colors.muted, fontSize: 15, lineHeight: 23 }} numberOfLines={expanded ? undefined : 4}>{description}</Text>
+                {description.length > 90 ? <Pressable onPress={() => setExpanded((value) => !value)}><Text style={{ color: colors.primary, fontWeight: "700", marginTop: 10 }}>{expanded ? "Show Less" : "Read More"}</Text></Pressable> : null}
               </View>
             ) : null}
             {tab === "amenities" ? (
               item.amenities?.length ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {item.amenities.map((amenity) => (
-                    <View key={amenity.id} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f6f7f4", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 }}>
-                      <Ionicons name="checkmark-circle" size={16} color="#146c36" />
-                      <Text style={{ color: "#1c1c1c", fontWeight: "600" }}>{amenity.name}</Text>
+                    <View key={amenity.id} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 }}>
+                      <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+                      <Text style={{ color: colors.ink, fontWeight: "600" }}>{amenity.name}</Text>
                     </View>
                   ))}
                 </View>
-              ) : <Text style={{ color: "#8a918c" }}>No amenities listed.</Text>
+              ) : <Text style={{ color: colors.muted }}>No amenities listed.</Text>
             ) : null}
             {tab === "location" ? (
-              <View style={{ backgroundColor: "#f6f7f4", borderRadius: 16, padding: 14 }}>
-                <Text style={{ color: "#1c1c1c", fontWeight: "700" }}>{place}</Text>
-                {item.address ? <Text style={{ color: "#6b7280", marginTop: 6, lineHeight: 20 }}>{item.address}</Text> : null}
+              <View style={{ backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.line, padding: 16 }}>
+                <Text style={{ color: colors.ink, fontWeight: "700" }}>{place}</Text>
+                {item.address ? <Text style={{ color: colors.muted, marginTop: 6, lineHeight: 20 }}>{item.address}</Text> : null}
               </View>
             ) : null}
             {tab === "documents" ? (
               <View style={{ gap: 8 }}>
-                <Text style={{ color: "#6b7280", lineHeight: 20 }}>Documents are shared after you enquire.</Text>
-                <Pressable onPress={() => onSchedule(item.id)}><Text style={{ color: "#146c36", fontWeight: "800" }}>Schedule a visit</Text></Pressable>
+                <Text style={{ color: colors.muted, lineHeight: 20 }}>Documents are shared after you enquire.</Text>
+                <Pressable onPress={() => onSchedule(item.id)}><Text style={{ color: colors.primary, fontWeight: "700" }}>Schedule a visit</Text></Pressable>
               </View>
             ) : null}
           </View>
-          {note ? <Text style={{ color: "#146c36", marginTop: 12 }}>{note}</Text> : null}
+          {note ? <Text style={{ color: colors.muted, marginTop: 12 }}>{note}</Text> : null}
         </View>
       </ScrollView>
-      <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 14, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: "white", borderTopWidth: 1, borderTopColor: "#f1eee8", gap: 8 }}>
-        <Pressable onPress={() => { if (!token) { requireLogin("Sign in to schedule a visit."); return; } onSchedule(item.id); }} style={{ height: 46, borderWidth: 1, borderColor: "#146c36", borderRadius: 12, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: "#146c36", fontWeight: "800" }}>Schedule a visit</Text>
+      <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.lineSoft, gap: 8 }}>
+        <Pressable onPress={() => { if (!token) { requireLogin("Sign in to schedule a visit."); return; } onSchedule(item.id); }} style={({ pressed }) => ({ height: 52, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
+          <Text style={{ color: colors.white, fontWeight: "700" }}>Schedule a visit</Text>
         </Pressable>
         <View style={{ flexDirection: "row", gap: 8 }}>
-        <Pressable onPress={() => phone ? Linking.openURL(`tel:${phone}`) : setNote("Phone number is not available.")} style={{ flex: 0.9, height: 48, borderWidth: 1, borderColor: "#e7e2d8", borderRadius: 12, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, backgroundColor: "white" }}>
-          <Ionicons name="call-outline" size={16} color="#1c1c1c" />
-          <Text style={{ fontWeight: "700", color: "#1c1c1c" }}>Call</Text>
+        <Pressable onPress={() => phone ? Linking.openURL(`tel:${phone}`) : setNote("Phone number is not available.")} style={{ flex: 0.9, height: 52, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, backgroundColor: colors.card }}>
+          <Ionicons name="call-outline" size={16} color={colors.primary} />
+          <Text style={{ fontWeight: "700", color: colors.primary }}>Call</Text>
         </Pressable>
-        <Pressable onPress={() => phone ? Linking.openURL(`https://wa.me/${phone.replace(/^\+/, "")}`) : setNote("Phone number is not available.")} style={{ flex: 1.25, height: 48, backgroundColor: "#22c55e", borderRadius: 12, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 }}>
+        <Pressable onPress={() => phone ? Linking.openURL(`https://wa.me/${phone.replace(/^\+/, "")}`) : setNote("Phone number is not available.")} style={{ flex: 1.25, height: 52, backgroundColor: "#128C7E", borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 }}>
           <Ionicons name="logo-whatsapp" size={18} color="white" />
-          <Text style={{ color: "white", fontWeight: "800" }}>WhatsApp</Text>
+          <Text style={{ color: "white", fontWeight: "700" }}>WhatsApp</Text>
         </Pressable>
-        <Pressable onPress={chat} style={{ flex: 1.15, height: 48, backgroundColor: "#146c36", borderRadius: 12, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 }}>
+        <Pressable onPress={chat} style={({ pressed }) => ({ flex: 1.15, height: 52, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 })}>
           <Ionicons name="chatbubble-ellipses" size={16} color="white" />
-          <Text style={{ color: "white", fontWeight: "800" }}>Chat</Text>
+          <Text style={{ color: "white", fontWeight: "700" }}>Chat</Text>
         </Pressable>
         </View>
       </View>
@@ -909,10 +932,10 @@ function RoundIcon({ name, onPress }: { name: keyof typeof Ionicons.glyphMap; on
 
 function Fact({ icon, value, label }: { icon?: keyof typeof Ionicons.glyphMap; value: string; label: string }) {
   return (
-    <View style={{ flex: 1, minWidth: 0, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#efeae3", alignItems: "center", justifyContent: "center", paddingVertical: 12, paddingHorizontal: 4 }}>
-      {icon ? <Ionicons name={icon} size={18} color="#7b847e" /> : null}
-      <Text numberOfLines={1} style={{ marginTop: icon ? 8 : 0, fontWeight: "800", color: "#171717", fontSize: 14 }}>{value}</Text>
-      <Text numberOfLines={1} style={{ marginTop: 2, color: "#8d948e", fontSize: 11 }}>{label}</Text>
+    <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", paddingVertical: 12, paddingHorizontal: 4 }}>
+      {icon ? <Ionicons name={icon} size={18} color={colors.primary} /> : null}
+      <Text numberOfLines={1} style={{ marginTop: icon ? 8 : 0, fontWeight: "700", color: colors.ink, fontSize: 14 }}>{value}</Text>
+      <Text numberOfLines={1} style={{ marginTop: 2, color: colors.faint, fontSize: 11 }}>{label}</Text>
     </View>
   );
 }

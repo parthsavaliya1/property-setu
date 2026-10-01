@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/center-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0e4d32"
+      "backgroundColor": "#8F4F32"
     },
     "ios": {
       "supportsTablet": true,

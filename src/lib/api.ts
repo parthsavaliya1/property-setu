@@ -122,6 +122,18 @@ export function listingPrice(badge: "standard" | "premium", term: "month" | "yea
   return term === "year" ? Math.round(monthly * 12 * 0.85) : monthly;
 }
 
+/** Extra to collect when a live listing moves to a higher plan. The current fee is already paid. */
+export function upgradeCharge(
+  nextBadge: "standard" | "premium",
+  nextTerm: "month" | "year",
+  currentBadge: "standard" | "premium" | null,
+  currentTerm: "month" | "year" | null,
+) {
+  const nextFee = listingPrice(nextBadge, nextTerm);
+  if (!currentBadge || !currentTerm) return nextFee;
+  return Math.max(0, nextFee - listingPrice(currentBadge, currentTerm));
+}
+
 export type AuthUser = { id: string; email: string };
 
 export const api = {

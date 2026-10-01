@@ -120,7 +120,7 @@ export type Property = {
   possession_status: string | null;
   facing: string | null;
   status: PropertyStatus;
-  verification_status: "pending" | "submitted" | "verified" | "rejected";
+  verification_status: "pending" | "submitted" | "verified" | "rejected" | "active";
   is_featured: boolean;
   is_premium: boolean;
   published_at: string | null;
@@ -138,6 +138,7 @@ export type PropertyCard = Property & {
   state?: string | null;
   cover_image?: string | null;
   listing_label?: string | null;
+  listing_term?: "month" | "year" | null;
   is_favorite?: boolean;
   owner_name?: string | null;
   owner_phone?: string | null;

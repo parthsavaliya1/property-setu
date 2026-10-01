@@ -1,6 +1,7 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { Modal, Platform, Pressable, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { colors } from "../theme";
 
 export type RazorpayOrder = {
   keyId: string;
@@ -40,7 +41,7 @@ function checkoutHtml(order: RazorpayOrder) {
     description: ${JSON.stringify(order.description)},
     order_id: ${JSON.stringify(order.orderId)},
     prefill: { email: ${JSON.stringify(order.email || "")} },
-    theme: { color: "#146c36" },
+    theme: { color: "#B56A45" },
     handler: function (response) {
       window.ReactNativeWebView.postMessage(JSON.stringify(response));
     },
@@ -77,7 +78,7 @@ function openWebCheckout(order: RazorpayOrder) {
         description: order.description,
         order_id: order.orderId,
         prefill: { email: order.email || "" },
-        theme: { color: "#146c36" },
+        theme: { color: "#B56A45" },
         handler: (response: RazorpaySuccess) => resolve(response),
         modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
       });
@@ -129,11 +130,11 @@ export function RazorpayHost({ children }: { children: ReactNode }) {
     <CheckoutContext.Provider value={{ pay }}>
       {children}
       <Modal visible={Boolean(order)} animationType="slide" onRequestClose={() => finish(new Error("Payment cancelled"))}>
-        <View style={{ flex: 1, backgroundColor: "#F4EFE8" }}>
-          <View style={{ paddingTop: 18, paddingHorizontal: 16, paddingBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: "#1c1c1c" }}>Pay listing fee</Text>
+        <View style={{ flex: 1, backgroundColor: colors.page }}>
+          <View style={{ paddingTop: 18, paddingHorizontal: 20, paddingBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>Pay listing fee</Text>
             <Pressable onPress={() => finish(new Error("Payment cancelled"))} hitSlop={8}>
-              <Text style={{ color: "#146c36", fontWeight: "800" }}>Cancel</Text>
+              <Text style={{ color: colors.primary, fontWeight: "700" }}>Cancel</Text>
             </Pressable>
           </View>
           {order ? (

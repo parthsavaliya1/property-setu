@@ -5,11 +5,12 @@ import { useNavigation } from "@react-navigation/native";
 import { useEffect, useState } from "react";
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Field, ListSkeleton, PageHeader, styles } from "../components/ui";
+import { PageHeader, SkeletonBlock, styles } from "../components/ui";
 import { useRazorpay } from "../components/RazorpayCheckout";
 import { useAuth } from "../context/AuthContext";
-import { api, inr, listingPrice, uploadMedia } from "../lib/api";
+import { api, inr, listingPrice, upgradeCharge, uploadMedia } from "../lib/api";
 import { readCurrentPlace } from "../lib/location";
+import { buttonShadow, colors } from "../theme";
 import type { PropertyDetail } from "../types/database";
 
 const kinds = [
@@ -25,7 +26,7 @@ const kinds = [
 ];
 
 const listings = [
-  { id: "sale", title: "Sell", detail: "I want to sell this property", color: "#146c36" },
+  { id: "sale", title: "Sell", detail: "I want to sell this property", color: "#B56A45" },
   { id: "rent", title: "Rent", detail: "I want to rent this property", color: "#f97316" },
   { id: "lease", title: "Lease", detail: "I want to lease this property", color: "#f97316" },
   { id: "pg", title: "PG / Co-living", detail: "I want to rent as PG / Co-living", color: "#f97316" },
@@ -60,8 +61,35 @@ const listingPlans = [
   { id: "premium" as const, title: "Premium", detail: "₹30 for 1 month, or ₹306 for 1 year after 15% off. Shows first on the home page.", tag: "Premium" },
 ];
 
-const green = "#146c36";
-const page = "#F4EFE8";
+function listingNeedsPayment(
+  status: string,
+  expiresAt: string | null,
+  badge: "standard" | "premium",
+  term: "month" | "year",
+  savedBadge: "standard" | "premium",
+  savedTerm: "month" | "year",
+) {
+  const live = status === "published" && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
+  if (!live) return true;
+  if (badge === "premium" && savedBadge !== "premium") return true;
+  if (term === "year" && savedTerm !== "year") return true;
+  return false;
+}
+
+function amountDue(
+  status: string,
+  expiresAt: string | null,
+  badge: "standard" | "premium",
+  term: "month" | "year",
+  savedBadge: "standard" | "premium",
+  savedTerm: "month" | "year",
+) {
+  const live = status === "published" && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
+  return upgradeCharge(badge, term, live ? savedBadge : null, live ? savedTerm : null);
+}
+
+const green = colors.primary;
+const page = colors.page;
 
 export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone: () => void }) {
   const auth = useAuth();
@@ -97,6 +125,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   const [listingStatus, setListingStatus] = useState("");
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [savedBadge, setSavedBadge] = useState<"standard" | "premium">("standard");
+  const [savedTerm, setSavedTerm] = useState<"month" | "year">("month");
   const [maintenance, setMaintenance] = useState("");
   const [deposit, setDeposit] = useState("");
   const [amenities, setAmenities] = useState<Array<{ id: string; slug?: string; name: string }>>([]);
@@ -148,8 +177,11 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       setPickedAmenitySlugs((item.amenities || []).map((amenity) => amenity.slug).filter((slug) => amenityChoices.some((choice) => choice.slug === slug)));
       setPickedFeatures((item.features || []).map((feature) => feature.feature_key).filter((key) => featureChoices.includes(key)));
       const badge = item.listing_label === "Premium" || item.is_premium ? "premium" : "standard";
+      const term = item.listing_term === "year" ? "year" : "month";
       setListingBadge(badge);
       setSavedBadge(badge);
+      setListingTerm(term);
+      setSavedTerm(term);
       setListingStatus(item.status || "");
       setExpiresAt(item.expires_at ?? null);
     }).catch((err) => setError(err instanceof Error ? err.message : "Could not open this property")).finally(() => setOpening(false));
@@ -263,6 +295,11 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       setStep(4);
       return;
     }
+    if (year && (Number(year) < 1800 || Number(year) > 2200)) {
+      setError("Enter a construction year between 1800 and 2200.");
+      setStep(3);
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -272,12 +309,10 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         setAmenities(catalog);
       }
       const amenityIds = pickedAmenitySlugs.map((slug) => amenityId(slug, catalog)).filter((id): id is string => Boolean(id));
+      const badge = propertyId ? savedBadge : listingBadge;
+      const term = propertyId ? savedTerm : listingTerm;
+      const mustPay = listingNeedsPayment(listingStatus, expiresAt, badge, term, savedBadge, savedTerm);
       const live = listingStatus === "published" && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
-      const upgrading = live && listingBadge === "premium" && savedBadge !== "premium";
-      const mustPay = !live || upgrading;
-      const badgeFeature = listingBadge === "standard" || (mustPay && live)
-        ? []
-        : [{ feature_key: "listing_badge", feature_value: "Premium" }];
       const payload = {
         category_slug: categorySlug,
         title: title.trim(),
@@ -309,11 +344,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
           ...(video ? [{ image_url: video, image_type: "video", is_cover: false }] : []),
         ] : undefined,
         amenity_ids: amenityIds,
-        features: [
-          ...pickedFeatures.map((feature_key) => ({ feature_key })),
-          ...badgeFeature,
-        ],
-        ...(mustPay && live ? {} : { listing_badge: listingBadge }),
+        features: pickedFeatures.map((feature_key) => ({ feature_key })),
         pricing: price ? {
           price: Number(price),
           price_type: priceUnit === "per_sqft" ? "per_sqft" : listingType === "rent" ? "monthly_rent" : "sale",
@@ -332,7 +363,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         setListingStatus("draft");
       }
       if (mustPay) {
-        const fee = listingPrice(listingBadge, listingTerm);
+        const fee = amountDue(listingStatus, expiresAt, badge, term, savedBadge, savedTerm);
         let balance = walletBalance ?? 0;
         if (balance < fee) {
           const order = await api.walletOrder(fee - balance, auth.token);
@@ -352,7 +383,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
           balance = credited.balance;
           setWalletBalance(balance);
         }
-        const spent = await api.walletSpend(id, listingBadge, listingTerm, auth.token);
+        const spent = await api.walletSpend(id, badge, term, auth.token);
         setWalletBalance(spent.balance);
       }
       onDone();
@@ -386,7 +417,20 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
     return (
       <View style={{ flex: 1, backgroundColor: page }}>
         <PageHeader title={propertyId ? "Edit Property" : "List a Property"} onBack={leave} />
-        <ListSkeleton rows={5} />
+        <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 16, gap: 12 }}>
+          <SkeletonBlock height={8} radius={4} />
+          <SkeletonBlock height={28} width="46%" radius={8} />
+          <SkeletonBlock height={52} radius={14} />
+          <SkeletonBlock height={52} radius={14} />
+          <SkeletonBlock height={90} radius={14} />
+          <SkeletonBlock height={52} radius={14} />
+          <SkeletonBlock height={52} radius={14} />
+          <View style={{ flex: 1 }} />
+          <View style={{ flexDirection: "row", gap: 10, paddingBottom: 16 }}>
+            <View style={{ flex: 1 }}><SkeletonBlock height={52} radius={14} /></View>
+            <View style={{ flex: 1 }}><SkeletonBlock height={52} radius={14} /></View>
+          </View>
+        </View>
       </View>
     );
   }
@@ -406,7 +450,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
         {step === 0 && (
           <View>
-            <Text style={{ fontSize: 22, fontWeight: "800", textAlign: "center", marginVertical: 18, color: "#1c1c1c" }}>What are you listing?</Text>
+            <Text style={{ fontSize: 22, fontWeight: "800", textAlign: "center", marginVertical: 18, color: colors.ink }}>What are you listing?</Text>
             <View style={{ gap: 12 }}>
               {[0, 1, 2].map((row) => (
                 <View key={row} style={{ flexDirection: "row", gap: 10 }}>
@@ -417,7 +461,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
                         <View style={{ width: "100%", aspectRatio: 1.15, borderRadius: 14, overflow: "hidden", borderWidth: selected ? 2 : 0, borderColor: green }}>
                           <Image source={item.image} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
                         </View>
-                        <Text numberOfLines={2} style={{ textAlign: "center", marginTop: 6, minHeight: 36, fontWeight: "600", color: "#1c1c1c", fontSize: 13 }}>{item.label}</Text>
+                        <Text numberOfLines={2} style={{ textAlign: "center", marginTop: 6, minHeight: 36, fontWeight: "600", color: colors.ink, fontSize: 13 }}>{item.label}</Text>
                       </Pressable>
                     );
                   })}
@@ -432,12 +476,12 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             {listings.map((item) => {
               const selected = listingType === item.id;
               return (
-                <Pressable key={item.id} onPress={() => setListingType(item.id)} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: selected ? "#f3faf6" : "white", borderRadius: 14, borderWidth: 1, borderColor: selected ? green : "#eeeae2", padding: 14, marginBottom: 10 }}>
+                <Pressable key={item.id} onPress={() => setListingType(item.id)} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: selected ? colors.primarySoft : colors.card, borderRadius: 14, borderWidth: 1, borderColor: selected ? green : colors.line, padding: 14, marginBottom: 10 }}>
                   <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: selected ? green : item.color, alignItems: "center", justifyContent: "center" }}>
                     <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: selected ? green : item.color }} />
                   </View>
                   <View>
-                    <Text style={{ fontWeight: "800", color: "#1c1c1c" }}>{item.title}</Text>
+                    <Text style={{ fontWeight: "800", color: colors.ink }}>{item.title}</Text>
                     <Text style={{ color: "#8a918c", marginTop: 2 }}>{item.detail}</Text>
                   </View>
                 </Pressable>
@@ -448,8 +492,8 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         {step === 2 && (
           <View>
             <Text style={heading}>Property Location</Text>
-            <Pressable onPress={useCurrentLocation} disabled={locating} style={{ backgroundColor: "#e8f1ff", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 16, opacity: locating ? 0.6 : 1 }}>
-              <Text style={{ color: "#3b82f6", fontWeight: "700" }}>{locating ? "Finding your location..." : "Use Current Location"}</Text>
+            <Pressable onPress={useCurrentLocation} disabled={locating} style={{ backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", marginBottom: 16, opacity: locating ? 0.6 : 1 }}>
+              <Text style={{ color: colors.primary, fontWeight: "700" }}>{locating ? "Finding your location..." : "Use Current Location"}</Text>
             </Pressable>
             <Label text="Address" />
             <Input value={address} onChangeText={setAddress} placeholder="Enter full address" />
@@ -459,8 +503,8 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Input value={locality} onChangeText={setLocality} placeholder="Enter area" />
             <Label text="Pincode" />
             <Input value={pincode} onChangeText={setPincode} placeholder="Enter pincode" keyboardType="number-pad" />
-            <View style={{ height: 110, borderRadius: 14, backgroundColor: "#e7efe8", alignItems: "center", justifyContent: "center", marginTop: 8 }}>
-              <Ionicons name="location" size={28} color="#e11d48" />
+            <View style={{ height: 110, borderRadius: 14, backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center", marginTop: 8 }}>
+              <Ionicons name="location" size={28} color={colors.heart} />
             </View>
           </View>
         )}
@@ -472,9 +516,18 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Label text="Description" />
             <TextInput value={description} onChangeText={setDescription} placeholder="Write property details..." placeholderTextColor="#b0b6b1" multiline style={[box, { minHeight: 90, textAlignVertical: "top" }]} />
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <Choice label="Bedrooms" value={bedrooms} options={["1", "2", "3", "4", "5", "6"]} onChange={setBedrooms} />
-              <Choice label="Bathrooms" value={bathrooms} options={["1", "2", "3", "4", "5"]} onChange={setBathrooms} />
-              <Choice label="Balconies" value={balconies} options={["0", "1", "2", "3", "4"]} onChange={setBalconies} />
+              <View style={{ flex: 1 }}>
+                <Label text="Bedrooms" />
+                <Input value={bedrooms} onChangeText={(value) => setBedrooms(value.replace(/\D/g, "").slice(0, 2))} placeholder="3" keyboardType="number-pad" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Label text="Bathrooms" />
+                <Input value={bathrooms} onChangeText={(value) => setBathrooms(value.replace(/\D/g, "").slice(0, 2))} placeholder="2" keyboardType="number-pad" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Label text="Balconies" />
+                <Input value={balconies} onChangeText={(value) => setBalconies(value.replace(/\D/g, "").slice(0, 2))} placeholder="1" keyboardType="number-pad" />
+              </View>
             </View>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
@@ -484,7 +537,10 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
               <Choice label="Furnishing" value={furnishing} placeholder="Select" options={["furnished", "semi_furnished", "unfurnished"]} onChange={setFurnishing} />
             </View>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <Choice label="Construction Year" value={year} placeholder="Select" options={["2026", "2025", "2024", "2020", "2015", "2010"]} onChange={setYear} />
+              <View style={{ flex: 1 }}>
+                <Label text="Construction Year" />
+                <Input value={year} onChangeText={(value) => setYear(value.replace(/\D/g, "").slice(0, 4))} placeholder="2024" keyboardType="number-pad" />
+              </View>
               <Choice label="Possession" value={possession} placeholder="Select" options={["Ready to move", "Under construction"]} onChange={setPossession} />
             </View>
           </View>
@@ -517,15 +573,15 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Input value={price} onChangeText={setPrice} placeholder="Enter price" keyboardType="number-pad" />
             <Label text="Price Unit" />
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-              <Pressable onPress={() => setPriceUnit("total")} style={{ flex: 1, backgroundColor: priceUnit === "total" ? green : "#f3f1ea", borderRadius: 10, paddingVertical: 14, alignItems: "center" }}>
-                <Text style={{ color: priceUnit === "total" ? "white" : "#1c1c1c", fontWeight: "800" }}>Total</Text>
+              <Pressable onPress={() => setPriceUnit("total")} style={{ flex: 1, backgroundColor: priceUnit === "total" ? green : colors.card, borderRadius: 14, borderWidth: 1, borderColor: priceUnit === "total" ? green : colors.line, height: 52, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: priceUnit === "total" ? colors.white : colors.muted, fontWeight: "700" }}>Total</Text>
               </Pressable>
-              <Pressable onPress={() => setPriceUnit("per_sqft")} style={{ flex: 1, backgroundColor: priceUnit === "per_sqft" ? green : "#f3f1ea", borderRadius: 10, paddingVertical: 14, alignItems: "center" }}>
-                <Text style={{ color: priceUnit === "per_sqft" ? "white" : "#6e766f", fontWeight: "700" }}>Per Sq.ft</Text>
+              <Pressable onPress={() => setPriceUnit("per_sqft")} style={{ flex: 1, backgroundColor: priceUnit === "per_sqft" ? green : colors.card, borderRadius: 14, borderWidth: 1, borderColor: priceUnit === "per_sqft" ? green : colors.line, height: 52, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: priceUnit === "per_sqft" ? colors.white : colors.muted, fontWeight: "700" }}>Per Sq.ft</Text>
               </Pressable>
             </View>
             <Pressable onPress={() => setNegotiable((value) => !value)} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <Ionicons name={negotiable ? "checkbox" : "square-outline"} size={22} color={negotiable ? "#3b82f6" : "#9aa19c"} />
+              <Ionicons name={negotiable ? "checkbox" : "square-outline"} size={22} color={negotiable ? colors.primary : colors.faint} />
               <Text style={{ fontWeight: "700" }}>Negotiable</Text>
             </Pressable>
             <Label text="Maintenance Charges (if any)" />
@@ -533,27 +589,32 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Label text="Security Deposit (for rent)" />
             <Input value={deposit} onChangeText={setDeposit} placeholder="Enter amount" keyboardType="number-pad" />
             <Label text="Listing plan" />
-            <Text style={{ color: "#8a918c", marginBottom: 10 }}>The fee is taken from your wallet. Wallet balance: {walletBalance == null ? "..." : inr(walletBalance)}. A year is 15% less than paying every month.</Text>
-            <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+            <Text style={{ color: "#8a918c", marginBottom: 10 }}>{propertyId ? "The plan and period were chosen when this listing was created. They stay as they are while you edit." : `The fee is taken from your wallet. Wallet balance: ${walletBalance == null ? "..." : inr(walletBalance)}. A year is 15% less than paying every month. If this listing is already paid, that amount comes off the new price. A paid month counts as the first month of the year.`}</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, opacity: propertyId ? 0.55 : 1 }} pointerEvents={propertyId ? "none" : "auto"}>
               {(["month", "year"] as const).map((option) => (
-                <Pressable key={option} onPress={() => setListingTerm(option)} style={{ flex: 1, backgroundColor: listingTerm === option ? green : "#f3f1ea", borderRadius: 10, paddingVertical: 12, alignItems: "center" }}>
-                  <Text style={{ color: listingTerm === option ? "white" : "#1c1c1c", fontWeight: "800" }}>{option === "month" ? "1 month" : "1 year · 15% off"}</Text>
+                <Pressable key={option} disabled={Boolean(propertyId)} onPress={() => setListingTerm(option)} style={{ flex: 1, backgroundColor: listingTerm === option ? green : colors.card, borderRadius: 14, borderWidth: 1, borderColor: listingTerm === option ? green : colors.line, minHeight: 52, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 }}>
+                  <Text style={{ color: listingTerm === option ? colors.white : colors.muted, fontWeight: "700", textAlign: "center" }}>{option === "month" ? "1 month" : "1 year · 15% off"}</Text>
                 </Pressable>
               ))}
             </View>
+            <View style={{ opacity: propertyId ? 0.55 : 1 }} pointerEvents={propertyId ? "none" : "auto"}>
             {listingPlans.map((plan) => {
               const selected = listingBadge === plan.id;
+              const full = listingPrice(plan.id, listingTerm);
+              const priceNow = amountDue(listingStatus, expiresAt, plan.id, listingTerm, savedBadge, savedTerm);
+              const credited = !propertyId && priceNow > 0 && priceNow < full;
               return (
-                <Pressable key={plan.id} onPress={() => setListingBadge(plan.id)} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: selected ? "#f3faf6" : "white", borderRadius: 14, borderWidth: 1, borderColor: selected ? green : "#eeeae2", padding: 14, marginBottom: 10 }}>
+                <Pressable key={plan.id} disabled={Boolean(propertyId)} onPress={() => setListingBadge(plan.id)} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: selected ? colors.primarySoft : colors.card, borderRadius: 14, borderWidth: 1, borderColor: selected ? green : colors.line, padding: 14, marginBottom: 10 }}>
                   <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={22} color={selected ? green : "#c5c5c5"} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: "800", color: "#1c1c1c" }}>{plan.title}</Text>
+                    <Text style={{ fontWeight: "800", color: colors.ink }}>{plan.title}</Text>
                     <Text style={{ color: "#8a918c", marginTop: 2 }}>{plan.detail}</Text>
                   </View>
-                  {plan.tag ? <View style={{ backgroundColor: "#f8e7c0", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ color: "#8a5a12", fontWeight: "800", fontSize: 12 }}>{plan.tag}</Text></View> : <Text style={{ color: "#8a918c", fontWeight: "700" }}>{inr(listingPrice(plan.id, listingTerm))}</Text>}
+                  {credited ? <Text style={{ color: "#8a918c", fontWeight: "700" }}>{inr(priceNow)} now</Text> : plan.tag ? <View style={{ backgroundColor: "#f8e7c0", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ color: "#8a5a12", fontWeight: "800", fontSize: 12 }}>{plan.tag}</Text></View> : <Text style={{ color: "#8a918c", fontWeight: "700" }}>{inr(full)}</Text>}
                 </Pressable>
               );
             })}
+            </View>
           </View>
         )}
         {step === 6 && (
@@ -590,12 +651,12 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Text style={heading}>Documents (Optional)</Text>
             {documents.map((item) => (
               <View key={item.type} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "white", borderRadius: 12, padding: 12, marginBottom: 10 }}>
-                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#e8f1ff", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="document-text-outline" size={18} color="#3b82f6" />
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="document-text-outline" size={18} color={colors.primary} />
                 </View>
-                <Text style={{ flex: 1, marginLeft: 10, fontWeight: "600" }}>{docs[item.type] ? `${item.label} added` : item.label}</Text>
+                <Text style={{ flex: 1, marginLeft: 10, fontWeight: "600", color: colors.ink }}>{docs[item.type] ? `${item.label} added` : item.label}</Text>
                 <Pressable onPress={() => pickDocument(item.type)}>
-                  <Ionicons name="cloud-upload-outline" size={20} color="#3b82f6" />
+                  <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
                 </Pressable>
               </View>
             ))}
@@ -603,26 +664,27 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         )}
       </ScrollView>
       <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: page }}>
-        <Pressable onPress={leave} style={{ flex: 1, borderWidth: 1, borderColor: "#e6e1d8", borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#f7f4ee" }}>
-          <Text style={{ fontWeight: "700" }}>{step === 0 ? "Cancel" : "Back"}</Text>
+        <Pressable onPress={leave} style={{ flex: 1, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", backgroundColor: colors.card }}>
+          <Text style={{ fontWeight: "700", color: colors.primary }}>{step === 0 ? "Cancel" : "Back"}</Text>
         </Pressable>
-        <Pressable onPress={next} disabled={busy} style={{ flex: 1, backgroundColor: green, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: busy ? 0.6 : 1 }}>
-          <Text style={{ color: "white", fontWeight: "800" }}>{busy ? "Please wait..." : step === 7 ? (listingStatus === "published" && (!expiresAt || new Date(expiresAt).getTime() > Date.now()) && !(listingBadge === "premium" && savedBadge !== "premium") ? "Save" : `Use ₹${listingPrice(listingBadge, listingTerm)} from wallet`) : "Next"}</Text>
+        <Pressable onPress={next} disabled={busy} style={({ pressed }) => ({ flex: 1, backgroundColor: pressed ? colors.primaryDark : green, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
+          <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? "Please wait..." : step === 7 ? (listingNeedsPayment(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) && amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) > 0 ? `Use ₹${amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm)} from wallet` : "Save") : "Next"}</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const heading = { fontSize: 22, fontWeight: "800" as const, color: "#1c1c1c", marginTop: 18, marginBottom: 14 };
-const box = { backgroundColor: "white", borderRadius: 10, borderWidth: 1, borderColor: "#eeeae2", paddingHorizontal: 12, paddingVertical: 12, color: "#1c1c1c", marginBottom: 12 };
+const heading = { fontSize: 22, fontWeight: "800" as const, color: colors.ink, marginTop: 18, marginBottom: 14 };
+const box = { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 14, minHeight: 52, color: colors.ink, marginBottom: 12 };
 
-function Label({ text }: { text: string }) {
-  return <Text style={{ color: "#3d3d3d", fontWeight: "700", marginBottom: 6 }}>{text}</Text>;
+function Label({ text, focused }: { text: string; focused?: boolean }) {
+  return <Text style={{ color: focused ? colors.primary : colors.ink, fontWeight: "600", marginBottom: 6 }}>{text}</Text>;
 }
 
 function Input({ value, onChangeText, placeholder, keyboardType }: { value: string; onChangeText: (value: string) => void; placeholder: string; keyboardType?: "default" | "number-pad" }) {
-  return <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#b0b6b1" keyboardType={keyboardType} style={box} />;
+  const [focused, setFocused] = useState(false);
+  return <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.faint} keyboardType={keyboardType} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={[box, focused && { borderColor: colors.primary }]} />;
 }
 
 function Choice({ label, value, placeholder, options, onChange }: { label: string; value: string; placeholder?: string; options: string[]; onChange: (value: string) => void }) {
@@ -631,8 +693,8 @@ function Choice({ label, value, placeholder, options, onChange }: { label: strin
     <View style={{ flex: 1 }}>
       <Label text={label} />
       <Pressable onPress={() => setOpen((current) => !current)} style={[box, { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: open ? 4 : 12 }]}>
-        <Text style={{ color: value ? "#1c1c1c" : "#b0b6b1" }}>{value ? value.replaceAll("_", " ") : placeholder || "Select"}</Text>
-        <Ionicons name="chevron-down" size={16} color="#8a918c" />
+        <Text style={{ color: value ? colors.ink : colors.faint }}>{value ? value.replaceAll("_", " ") : placeholder || "Select"}</Text>
+        <Ionicons name="chevron-down" size={16} color={colors.faint} />
       </Pressable>
       {open ? options.map((option) => (
         <Pressable key={option} onPress={() => { onChange(option); setOpen(false); }} style={{ paddingVertical: 8, paddingHorizontal: 8 }}>
@@ -701,49 +763,49 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
   const place = [item?.locality, item?.city].filter(Boolean).join(", ");
   const choices = open === "date" ? dates : times;
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#F4EFE8" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <PageHeader title="Schedule a Property Visit" />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 28 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 28 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View style={{ width: 92, height: 74, borderRadius: 12, overflow: "hidden", backgroundColor: "#d7e3db" }}>
+          <View style={{ width: 92, height: 74, borderRadius: 14, overflow: "hidden", backgroundColor: colors.secondary }}>
             {item?.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : null}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontWeight: "800", fontSize: 16, color: "#1c1c1c" }}>{item?.title || "Property"}</Text>
-            {place ? <Text style={{ color: "#8a918c", marginTop: 3 }}>{place}</Text> : null}
-            <Text style={{ color: "#146c36", fontWeight: "800", fontSize: 16, marginTop: 4 }}>{inr(item?.price)}</Text>
+            <Text style={{ fontWeight: "600", fontSize: 16, color: colors.ink }}>{item?.title || "Property"}</Text>
+            {place ? <Text style={{ color: colors.muted, marginTop: 3 }}>{place}</Text> : null}
+            <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 16, marginTop: 4 }}>{inr(item?.price)}</Text>
           </View>
         </View>
         <View style={{ flexDirection: "row", gap: 12, marginTop: 22 }}>
           <Pressable onPress={() => setOpen(open === "date" ? null : "date")} style={{ flex: 1 }}>
-            <Text style={{ color: "#3d3d3d", fontWeight: "700", marginBottom: 8 }}>Preferred Date</Text>
-            <View style={{ backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#e8e4dc", paddingHorizontal: 12, height: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: "#1c1c1c", fontWeight: "600" }}>{date}</Text>
-              <Ionicons name="chevron-down" size={16} color="#8a918c" />
+            <Text style={{ color: colors.ink, fontWeight: "600", marginBottom: 8 }}>Preferred Date</Text>
+            <View style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ color: colors.ink, fontWeight: "600" }}>{date}</Text>
+              <Ionicons name="chevron-down" size={16} color={colors.faint} />
             </View>
           </Pressable>
           <Pressable onPress={() => setOpen(open === "time" ? null : "time")} style={{ flex: 1 }}>
-            <Text style={{ color: "#3d3d3d", fontWeight: "700", marginBottom: 8 }}>Preferred Time</Text>
-            <View style={{ backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#e8e4dc", paddingHorizontal: 12, height: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: "#1c1c1c", fontWeight: "600" }}>{time}</Text>
-              <Ionicons name="chevron-down" size={16} color="#8a918c" />
+            <Text style={{ color: colors.ink, fontWeight: "600", marginBottom: 8 }}>Preferred Time</Text>
+            <View style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ color: colors.ink, fontWeight: "600" }}>{time}</Text>
+              <Ionicons name="chevron-down" size={16} color={colors.faint} />
             </View>
           </Pressable>
         </View>
         {open ? (
-          <View style={{ marginTop: 8, borderWidth: 1, borderColor: "#eeeae2", borderRadius: 12, backgroundColor: "white", overflow: "hidden" }}>
+          <View style={{ marginTop: 8, borderWidth: 1, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.card, overflow: "hidden" }}>
             {choices.map((option) => (
-              <Pressable key={option} onPress={() => { if (open === "date") setDate(option); else setTime(option); setOpen(null); }} style={{ paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f4f1ea" }}>
-                <Text style={{ color: "#1c1c1c", fontWeight: option === (open === "date" ? date : time) ? "800" : "500" }}>{option}</Text>
+              <Pressable key={option} onPress={() => { if (open === "date") setDate(option); else setTime(option); setOpen(null); }} style={{ paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.lineSoft }}>
+                <Text style={{ color: option === (open === "date" ? date : time) ? colors.primary : colors.ink, fontWeight: option === (open === "date" ? date : time) ? "700" : "500" }}>{option}</Text>
               </Pressable>
             ))}
           </View>
         ) : null}
-        <Text style={{ color: "#3d3d3d", fontWeight: "700", marginTop: 18, marginBottom: 8 }}>Message (Optional)</Text>
-        <TextInput value={notes} onChangeText={setNotes} placeholder="Any specific requirement..." placeholderTextColor="#b0b6b1" multiline style={{ minHeight: 96, textAlignVertical: "top", backgroundColor: "#f6f4ef", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: "#1c1c1c", fontSize: 15 }} />
+        <Text style={{ color: colors.ink, fontWeight: "600", marginTop: 18, marginBottom: 8 }}>Message (Optional)</Text>
+        <TextInput value={notes} onChangeText={setNotes} placeholder="Any specific requirement..." placeholderTextColor={colors.faint} multiline style={{ minHeight: 96, textAlignVertical: "top", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 15 }} />
         {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
-        <Pressable onPress={submit} disabled={busy} style={{ marginTop: 20, backgroundColor: "#146c36", borderRadius: 12, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1 }}>
-          <Text style={{ color: "white", fontWeight: "800", fontSize: 16 }}>{busy ? "Requesting..." : "Request Visit"}</Text>
+        <Pressable onPress={submit} disabled={busy} style={({ pressed }) => ({ marginTop: 24, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
+          <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>{busy ? "Requesting..." : "Request Visit"}</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

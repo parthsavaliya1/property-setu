@@ -38,7 +38,7 @@ export function ChatsScreen({ onOpen }: { onOpen: (id: string) => void }) {
             <View style={styles.cardBody}>
               <Text style={styles.title}>{item.other_name || "PropertySetu user"}</Text>
               <Text style={styles.meta}>{item.property_title}</Text>
-              <Text numberOfLines={1} style={{ color: "#1c1c1c", marginTop: 6 }}>{item.last_message || "No messages yet"}</Text>
+              <Text numberOfLines={1} style={{ color: colors.ink, marginTop: 6 }}>{item.last_message || "No messages yet"}</Text>
             </View>
           </Pressable>
         ))}
@@ -101,13 +101,13 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <PageHeader title="Chat" />
-      {loading ? <ListSkeleton rows={4} /> : (
+      {loading ? <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}><ListSkeleton /></View> : (
         <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }} keyboardShouldPersistTaps="handled">
           {items.map((item) => {
             const mine = item.mine ?? item.sender_id === mineId;
             return (
-              <View key={item.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "80%", backgroundColor: mine ? "#146c36" : "white", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 }}>
-                <Text style={{ color: mine ? "white" : "#1c1c1c" }}>{item.body}</Text>
+              <View key={item.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "80%", backgroundColor: mine ? colors.primary : colors.card, borderRadius: 16, borderWidth: mine ? 0 : 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 8 }}>
+                <Text style={{ color: mine ? colors.white : colors.ink }}>{item.body}</Text>
               </View>
             );
           })}
@@ -115,16 +115,16 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
         </ScrollView>
       )}
       {error ? <Text style={[styles.error, { marginHorizontal: 16 }]}>{error}</Text> : null}
-      <View style={{ flexDirection: "row", gap: 8, padding: 12, backgroundColor: "white" }}>
+      <View style={{ flexDirection: "row", gap: 8, padding: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.lineSoft }}>
         <TextInput
           value={draft}
           onChangeText={setDraft}
           placeholder="Write a message"
-          placeholderTextColor="#9aa19c"
-          style={{ flex: 1, backgroundColor: "#F4EFE8", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, color: "#1c1c1c" }}
+          placeholderTextColor={colors.faint}
+          style={{ flex: 1, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, paddingHorizontal: 14, minHeight: 52, color: colors.ink }}
         />
-        <Pressable onPress={send} style={{ backgroundColor: "#146c36", borderRadius: 14, paddingHorizontal: 16, justifyContent: "center" }}>
-          <Text style={{ color: "white", fontWeight: "800" }}>Send</Text>
+        <Pressable onPress={send} style={({ pressed }) => ({ backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, paddingHorizontal: 16, minHeight: 52, justifyContent: "center" })}>
+          <Text style={{ color: colors.white, fontWeight: "700" }}>Send</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
