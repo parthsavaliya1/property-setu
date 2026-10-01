@@ -5,7 +5,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useEffect, useState } from "react";
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Field, LogoLoader, PageHeader, styles } from "../components/ui";
+import { Button, Field, ListSkeleton, PageHeader, styles } from "../components/ui";
 import { useRazorpay } from "../components/RazorpayCheckout";
 import { useAuth } from "../context/AuthContext";
 import { api, inr, listingPrice, uploadMedia } from "../lib/api";
@@ -386,7 +386,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
     return (
       <View style={{ flex: 1, backgroundColor: page }}>
         <PageHeader title={propertyId ? "Edit Property" : "List a Property"} onBack={leave} />
-        <LogoLoader />
+        <ListSkeleton rows={5} />
       </View>
     );
   }

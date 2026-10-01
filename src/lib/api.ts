@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import { File } from "expo-file-system";
-import type { Category, Inquiry, Me, NotificationItem, PropertyCard, PropertyDetail, Visit } from "../types/database";
+import type { Category, ChatMessage, ChatThread, Inquiry, Me, NotificationItem, PropertyCard, PropertyDetail, Visit, WalletTransaction } from "../types/database";
 
 function usableHost(value?: string | null) {
   const host = value?.split(":")[0];
@@ -161,6 +161,12 @@ export const api = {
   updateMe: (payload: unknown, token: string) => request("/me", { method: "PATCH", body: JSON.stringify(payload) }, token),
   notifications: (token: string) => request<NotificationItem[]>("/notifications", {}, token),
   readNotification: (id: string, token: string) => request(`/notifications/${id}/read`, { method: "PATCH" }, token),
+  chats: (token: string) => request<ChatThread[]>("/chats", {}, token),
+  openChat: (propertyId: string, token: string, buyerId?: string) =>
+    request<ChatThread>(`/properties/${propertyId}/chat`, { method: "POST", body: JSON.stringify(buyerId ? { buyer_id: buyerId } : {}) }, token),
+  messages: (id: string, token: string) => request<ChatMessage[]>(`/chats/${id}/messages`, {}, token),
+  sendMessage: (id: string, body: string, token: string) =>
+    request<ChatMessage>(`/chats/${id}/messages`, { method: "POST", body: JSON.stringify({ body }) }, token),
   paymentOrder: (propertyId: string, listingBadge: "standard" | "premium", token: string) =>
     request<{ key_id: string; order_id: string; amount: number; currency: string; description: string }>(
       "/payments/order",
@@ -172,6 +178,7 @@ export const api = {
     token: string
   ) => request<{ ok: boolean; expires_at?: string }>("/payments/verify", { method: "POST", body: JSON.stringify(payload) }, token),
   wallet: (token: string) => request<{ balance: number }>("/wallet", {}, token),
+  walletHistory: (token: string) => request<WalletTransaction[]>("/wallet/transactions", {}, token),
   walletOrder: (amount: number, token: string) =>
     request<{ key_id: string; order_id: string; amount: number; currency: string; description: string }>(
       "/wallet/order",

@@ -1,13 +1,14 @@
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Modal, Pressable, Text, View } from "react-native";
 import { RequireLoginContext, useRequireLogin } from "./context/LoginGate";
 import { RazorpayHost } from "./components/RazorpayCheckout";
 import { useAuth } from "./context/AuthContext";
-import { FavoritesScreen, InquiriesScreen, MenuScreen, MyPropertiesScreen, NotificationsScreen, ProfileScreen, VisitsScreen, WalletScreen } from "./screens/AccountScreens";
+import { FavoritesScreen, InquiriesScreen, MenuScreen, MyPropertiesScreen, NotificationsScreen, PaymentHistoryScreen, ProfileScreen, VisitsScreen, WalletScreen } from "./screens/AccountScreens";
+import { ChatScreen, ChatsScreen } from "./screens/ChatScreens";
 import { LoginScreen, OnboardingScreen, SplashScreen } from "./screens/AuthScreens";
 import { DetailsScreen, HomeScreen, MapScreen, SearchScreen } from "./screens/BrowseScreens";
 import { AddScreen, ScheduleScreen } from "./screens/ListingScreens";
@@ -25,7 +26,10 @@ export type RootStackParamList = {
   Visits: undefined;
   Profile: undefined;
   Notifications: undefined;
+  Chats: undefined;
+  Chat: { conversationId?: string; propertyId?: string; buyerId?: string };
   Wallet: undefined;
+  PaymentHistory: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -40,7 +44,33 @@ function Tabs() {
   const { session } = useAuth();
   const requireLogin = useRequireLogin();
   const [searchQuery, setSearchQuery] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const tabNav = useRef<{ navigate: (name: "Saved" | "Profile") => void } | null>(null);
+
+  function openMenu() {
+    setMenuOpen(true);
+  }
+
+  function closeMenu(after?: () => void) {
+    setMenuOpen(false);
+    after?.();
+  }
+
+  function profilePage(showBack: boolean) {
+    return (
+      <ProfileScreen
+        showBack={showBack}
+        onOpen={openDetails}
+        onEdit={(id) => navigationRef.navigate("Add", { id })}
+        onWallet={() => (session ? navigationRef.navigate("Wallet") : navigationRef.navigate("Login"))}
+        onHistory={() => (session ? navigationRef.navigate("PaymentHistory") : navigationRef.navigate("Login"))}
+        onSignIn={() => navigationRef.navigate("Login")}
+      />
+    );
+  }
+
   return (
+    <View style={{ flex: 1 }}>
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -56,7 +86,9 @@ function Tabs() {
       })}
     >
       <Tab.Screen name="Home">
-        {({ navigation }) => (
+        {({ navigation }) => {
+          tabNav.current = navigation;
+          return (
           <HomeScreen
             onOpen={openDetails}
             onSearch={(query) => {
@@ -64,9 +96,10 @@ function Tabs() {
               navigation.navigate("Search");
             }}
             onNotify={() => navigationRef.navigate("Notifications")}
-            onProfile={() => navigation.navigate("Profile")}
+            onOpenMenu={openMenu}
           />
-        )}
+          );
+        }}
       </Tab.Screen>
       <Tab.Screen name="Search">{() => <SearchScreen initialQuery={searchQuery} onOpen={openDetails} />}</Tab.Screen>
       <Tab.Screen
@@ -96,15 +129,31 @@ function Tabs() {
       </Tab.Screen>
       <Tab.Screen name="Saved">{() => <FavoritesScreen onOpen={openDetails} />}</Tab.Screen>
       <Tab.Screen name="Profile">
-        {({ navigation }) => (
-          <MenuScreen
-            onNavigate={(screen) => navigationRef.navigate(screen)}
-            onFavorites={() => navigation.navigate("Saved")}
-            onSignIn={() => navigationRef.navigate("Login")}
-          />
-        )}
+        {({ navigation }) => {
+          tabNav.current = navigation;
+          return profilePage(false);
+        }}
       </Tab.Screen>
     </Tab.Navigator>
+    <Modal visible={menuOpen} animationType="fade" onRequestClose={() => closeMenu()}>
+      <MenuScreen
+        onClose={() => closeMenu()}
+        onProfile={() => closeMenu(() => tabNav.current?.navigate("Profile"))}
+        onFavorites={() => closeMenu(() => tabNav.current?.navigate("Saved"))}
+        onChats={() => closeMenu(() => {
+          if (!session) {
+            requireLogin("Sign in to see your messages.");
+            return;
+          }
+          navigationRef.navigate("Chats");
+        })}
+        onInquiries={() => closeMenu(() => session ? navigationRef.navigate("Inquiries") : navigationRef.navigate("Login"))}
+        onVisits={() => closeMenu(() => session ? navigationRef.navigate("Visits") : navigationRef.navigate("Login"))}
+        onNotifications={() => closeMenu(() => session ? navigationRef.navigate("Notifications") : navigationRef.navigate("Login"))}
+        onSignIn={() => closeMenu(() => navigationRef.navigate("Login"))}
+      />
+    </Modal>
+    </View>
   );
 }
 
@@ -148,15 +197,45 @@ export function RootNavigation() {
           <Stack.Screen name="Login">{() => <LoginScreen onBrowse={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} />}</Stack.Screen>
           <Stack.Screen name="Main" component={Tabs} />
           <Stack.Screen name="Map">{() => <MapScreen onOpen={openDetails} showBack />}</Stack.Screen>
-          <Stack.Screen name="Details">{({ route }) => <DetailsScreen id={route.params.id} onSchedule={(id) => navigationRef.navigate("Schedule", { id })} />}</Stack.Screen>
+          <Stack.Screen name="Details">{({ route }) => <DetailsScreen id={route.params.id} onSchedule={(id) => navigationRef.navigate("Schedule", { id })} onChat={(id) => navigationRef.navigate("Chat", { propertyId: id })} />}</Stack.Screen>
           <Stack.Screen name="Add">{({ route }) => session ? <AddScreen propertyId={route.params?.id} onDone={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} /> : <LoginScreen onBrowse={() => navigationRef.navigate("Main")} />}</Stack.Screen>
           <Stack.Screen name="Schedule">{({ route }) => <ScheduleScreen id={route.params.id} onDone={() => navigationRef.navigate("Visits")} />}</Stack.Screen>
           <Stack.Screen name="MyProperties">{() => <MyPropertiesScreen onOpen={openDetails} onEdit={(id) => navigationRef.navigate("Add", { id })} />}</Stack.Screen>
-          <Stack.Screen name="Inquiries" component={InquiriesScreen} />
+          <Stack.Screen name="Inquiries">{() => <InquiriesScreen onChat={(propertyId, buyerId) => navigationRef.navigate("Chat", { propertyId, buyerId: buyerId || undefined })} />}</Stack.Screen>
           <Stack.Screen name="Visits" component={VisitsScreen} />
-          <Stack.Screen name="Profile" component={ProfileScreen} />
-          <Stack.Screen name="Notifications" component={NotificationsScreen} />
-        <Stack.Screen name="Wallet" component={WalletScreen} />
+          <Stack.Screen name="Profile">{() => (
+            <ProfileScreen
+              showBack
+              onOpen={openDetails}
+              onEdit={(id) => navigationRef.navigate("Add", { id })}
+              onWallet={() => navigationRef.navigate("Wallet")}
+              onHistory={() => navigationRef.navigate("PaymentHistory")}
+              onSignIn={() => navigationRef.navigate("Login")}
+            />
+          )}</Stack.Screen>
+          <Stack.Screen name="Notifications">
+            {() => (
+              <NotificationsScreen
+                onOpen={(item) => {
+                  const conversationId = item.data?.conversation_id;
+                  if (item.type === "new_message" || item.type === "new_inquiry") {
+                    if (conversationId) navigationRef.navigate("Chat", { conversationId });
+                    else if (item.data?.property_id) navigationRef.navigate("Chat", { propertyId: item.data.property_id });
+                    return;
+                  }
+                  if (item.type === "visit_request") {
+                    navigationRef.navigate("Visits");
+                    return;
+                  }
+                  if (item.data?.property_id) navigationRef.navigate("Details", { id: item.data.property_id });
+                }}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="Chats">{() => <ChatsScreen onOpen={(id) => navigationRef.navigate("Chat", { conversationId: id })} />}</Stack.Screen>
+          <Stack.Screen name="Chat">{({ route }) => <ChatScreen conversationId={route.params?.conversationId} propertyId={route.params?.propertyId} buyerId={route.params?.buyerId} />}</Stack.Screen>
+        <Stack.Screen name="Wallet">{() => <WalletScreen onHistory={() => navigationRef.navigate("PaymentHistory")} />}</Stack.Screen>
+        <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
         </Stack.Navigator>
       </NavigationContainer>
       <Modal visible={Boolean(loginMessage)} transparent animationType="fade" onRequestClose={() => setLoginMessage(null)}>

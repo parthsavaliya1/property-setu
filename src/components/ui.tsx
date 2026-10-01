@@ -26,6 +26,75 @@ export function LogoLoader() {
   );
 }
 
+function useSkeletonPulse() {
+  const pulse = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return pulse;
+}
+
+export function SkeletonBlock({ width = "100%", height, radius = 10 }: { width?: number | `${number}%`; height: number; radius?: number }) {
+  const opacity = useSkeletonPulse();
+  return <Animated.View style={{ width, height, borderRadius: radius, backgroundColor: "#E4DDD2", opacity }} />;
+}
+
+export function PropertyGridSkeleton({ width, count = 4 }: { width: number; count?: number }) {
+  const opacity = useSkeletonPulse();
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+      {Array.from({ length: count }, (_, index) => (
+        <View key={index} style={{ width, backgroundColor: "white", borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: "#EFE8DE" }}>
+          <Animated.View style={{ height: 120, backgroundColor: "#E4DDD2", opacity }} />
+          <View style={{ padding: 10, gap: 8 }}>
+            <Animated.View style={{ height: 12, width: "78%", borderRadius: 6, backgroundColor: "#E4DDD2", opacity }} />
+            <Animated.View style={{ height: 12, width: "46%", borderRadius: 6, backgroundColor: "#E4DDD2", opacity }} />
+            <Animated.View style={{ height: 10, width: "64%", borderRadius: 6, backgroundColor: "#E4DDD2", opacity }} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function ListSkeleton({ rows = 6 }: { rows?: number }) {
+  const opacity = useSkeletonPulse();
+  return (
+    <View style={{ gap: 12 }}>
+      {Array.from({ length: rows }, (_, index) => (
+        <View key={index} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "white", borderRadius: 14, padding: 12 }}>
+          <Animated.View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#E4DDD2", opacity }} />
+          <View style={{ flex: 1, gap: 8 }}>
+            <Animated.View style={{ height: 12, width: "62%", borderRadius: 6, backgroundColor: "#E4DDD2", opacity }} />
+            <Animated.View style={{ height: 10, width: "40%", borderRadius: 6, backgroundColor: "#E4DDD2", opacity }} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function DetailSkeleton() {
+  const opacity = useSkeletonPulse();
+  return (
+    <View style={{ flex: 1, backgroundColor: "white" }}>
+      <Animated.View style={{ height: 340, backgroundColor: "#E4DDD2", opacity }} />
+      <View style={{ padding: 16, gap: 10 }}>
+        <Animated.View style={{ height: 18, width: "70%", borderRadius: 8, backgroundColor: "#E4DDD2", opacity }} />
+        <Animated.View style={{ height: 14, width: "46%", borderRadius: 8, backgroundColor: "#E4DDD2", opacity }} />
+        <Animated.View style={{ height: 22, width: "36%", borderRadius: 8, backgroundColor: "#E4DDD2", opacity }} />
+      </View>
+    </View>
+  );
+}
+
 export function EmptyState({ kind }: { kind: "active" | "search" }) {
   const search = kind === "search";
   return (
@@ -60,17 +129,16 @@ export function PageHeader({ title, onBack }: { title: string; onBack?: () => vo
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: colors.page }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <Pressable
-          onPress={onBack ?? (() => navigation.goBack())}
-          hitSlop={8}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "white", borderWidth: 1, borderColor: "#E7E0D6", alignItems: "center", justifyContent: "center" }}
-        >
-          <Ionicons name="chevron-back" size={22} color="#2C2825" />
-        </Pressable>
-        <Text style={{ flex: 1, fontSize: 22, fontWeight: "800", color: "#2C2825" }} numberOfLines={1}>{title}</Text>
-      </View>
+    <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 14, backgroundColor: colors.page, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center" }}>
+      <Pressable
+        onPress={onBack ?? (() => navigation.goBack())}
+        hitSlop={8}
+        style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: colors.page, borderWidth: 1.5, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}
+      >
+        <Ionicons name="arrow-back" size={24} color={colors.ink} />
+      </Pressable>
+      <Text style={{ flex: 1, marginLeft: 12, fontSize: 20, fontWeight: "800", color: "#1A1A1A" }} numberOfLines={1}>{title}</Text>
+      <View style={{ width: 46 }} />
     </View>
   );
 }

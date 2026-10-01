@@ -196,15 +196,46 @@ export type Visit = {
   cover_image?: string | null;
 };
 
+export type WalletTransaction = {
+  id: string;
+  amount: string;
+  direction: "credit" | "debit";
+  reason: string;
+  property_id: string | null;
+  property_title: string | null;
+  created_at: string;
+};
+
 export type NotificationItem = {
   id: string;
   user_id: string;
   type: string;
   title: string;
   message: string | null;
-  data: Record<string, unknown> | null;
+  data: { property_id?: string; inquiry_id?: string; conversation_id?: string; visit_id?: string } | null;
   is_read: boolean;
   created_at: string;
+};
+
+export type ChatThread = {
+  id: string;
+  property_id: string;
+  buyer_id: string;
+  owner_id: string;
+  created_at: string;
+  property_title?: string;
+  other_name?: string | null;
+  last_message?: string | null;
+  last_at?: string | null;
+};
+
+export type ChatMessage = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  mine?: boolean;
 };
 
 export type Me = {
