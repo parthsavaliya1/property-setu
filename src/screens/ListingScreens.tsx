@@ -3,8 +3,9 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
 import { useEffect, useState } from "react";
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput, useKeyboardOverlap } from "../components/keyboard";
 import { PageHeader, SkeletonBlock, styles } from "../components/ui";
 import { useRazorpay } from "../components/RazorpayCheckout";
 import { useAuth } from "../context/AuthContext";
@@ -96,6 +97,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   const pay = useRazorpay();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const keyboardOverlap = useKeyboardOverlap();
   const [step, setStep] = useState(0);
   const [categorySlug, setCategorySlug] = useState("house");
   const [listingType, setListingType] = useState("sale");
@@ -446,9 +448,9 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardScreen style={{ backgroundColor: page }}>
       <PageHeader title={propertyId ? "Edit Property" : "List a Property"} onBack={leave} right={closeButton} />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 24 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
+      <KeyboardFormScroll style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: green, alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: "white", fontWeight: "700", fontSize: 12 }}>{step + 1}/8</Text>
@@ -524,7 +526,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Label text="Title" />
             <Input value={title} onChangeText={setTitle} placeholder="e.g., 3 BHK House" />
             <Label text="Description" />
-            <TextInput value={description} onChangeText={setDescription} placeholder="Write property details..." placeholderTextColor="#b0b6b1" multiline style={[box, { minHeight: 90, textAlignVertical: "top" }]} />
+            <TextInput value={description} onChangeText={setDescription} onFocus={requestScrollFocusedInput} placeholder="Write property details..." placeholderTextColor="#b0b6b1" multiline style={[box, { minHeight: 90, textAlignVertical: "top" }]} />
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
                 <Label text="Bedrooms" />
@@ -672,8 +674,8 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             ))}
           </View>
         )}
-      </ScrollView>
-      <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: page }}>
+      </KeyboardFormScroll>
+      <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingTop: 10, paddingBottom: keyboardOverlap > 0 ? 10 : Math.max(insets.bottom, 12), backgroundColor: page }}>
         <Pressable onPress={leave} style={{ flex: 1, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", backgroundColor: colors.card }}>
           <Text style={{ fontWeight: "700", color: colors.primary }}>{step === 0 ? "Cancel" : "Back"}</Text>
         </Pressable>
@@ -681,7 +683,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
           <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? "Please wait..." : step === 7 ? (listingNeedsPayment(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) && amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) > 0 ? `Use ₹${amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm)} from wallet` : "Save") : "Next"}</Text>
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }
 
@@ -694,7 +696,7 @@ function Label({ text, focused }: { text: string; focused?: boolean }) {
 
 function Input({ value, onChangeText, placeholder, keyboardType }: { value: string; onChangeText: (value: string) => void; placeholder: string; keyboardType?: "default" | "number-pad" }) {
   const [focused, setFocused] = useState(false);
-  return <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.faint} keyboardType={keyboardType} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={[box, focused && { borderColor: colors.primary }]} />;
+  return <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.faint} keyboardType={keyboardType} onFocus={() => { setFocused(true); requestScrollFocusedInput(); }} onBlur={() => setFocused(false)} style={[box, focused && { borderColor: colors.primary }]} />;
 }
 
 function Choice({ label, value, placeholder, options, onChange }: { label: string; value: string; placeholder?: string; options: string[]; onChange: (value: string) => void }) {
@@ -776,9 +778,9 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
 
   const place = [item?.locality, item?.city].filter(Boolean).join(", ");
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardScreen style={{ backgroundColor: colors.page }}>
       <PageHeader title="Schedule a visit" subtitle="Pick a day and time that works for you" />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
+      <KeyboardFormScroll style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 12, flexDirection: "row", gap: 12, alignItems: "center" }}>
           <View style={{ width: 88, height: 88, borderRadius: 16, overflow: "hidden", backgroundColor: colors.secondary }}>
             {item?.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : (
@@ -821,12 +823,12 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
         </View>
 
         <Text style={{ color: colors.ink, fontWeight: "800", fontSize: 16, marginTop: 22, marginBottom: 10 }}>Message</Text>
-        <TextInput value={notes} onChangeText={setNotes} placeholder="Any specific requirement (optional)" placeholderTextColor={colors.faint} multiline style={{ minHeight: 110, textAlignVertical: "top", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 15 }} />
+        <TextInput value={notes} onChangeText={setNotes} onFocus={requestScrollFocusedInput} placeholder="Any specific requirement (optional)" placeholderTextColor={colors.faint} multiline style={{ minHeight: 110, textAlignVertical: "top", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 15 }} />
         {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
         <Pressable onPress={submit} disabled={busy} style={({ pressed }) => ({ marginTop: 22, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
           <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>{busy ? "Requesting..." : "Request visit"}</Text>
         </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardFormScroll>
+    </KeyboardScreen>
   );
 }

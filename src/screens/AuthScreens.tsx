@@ -2,7 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Animated, Dimensions, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, Text, TextInput, View, type TextInputProps } from "react-native";
+import { Animated, Dimensions, Image, Pressable, StatusBar, Text, TextInput, View, type TextInputProps } from "react-native";
+import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput } from "../components/keyboard";
 import { styles } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { buttonShadow, colors } from "../theme";
@@ -115,12 +116,12 @@ export function LoginScreen(_props: { onBrowse: () => void }) {
   const { width, height } = Dimensions.get("window");
   const sheetWidth = Math.min(width, 430);
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#c4b29a" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardScreen style={{ backgroundColor: "#c4b29a" }}>
       <StatusBar barStyle="light-content" />
       <Image source={loginBg} style={{ position: "absolute", top: 0, left: 0, width, height }} resizeMode="cover" />
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-      <Animated.View style={{ alignSelf: "center", width: sheetWidth, maxHeight: height - 72, backgroundColor: "white", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", transform: [{ translateY: slide }] }}>
-        <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets bounces={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <Animated.View style={{ alignSelf: "center", width: sheetWidth, maxHeight: height - 72, flexShrink: 1, backgroundColor: "white", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", transform: [{ translateY: slide }] }}>
+        <KeyboardFormScroll bounces={false} style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ alignSelf: "center", width: 44, height: 5, borderRadius: 5, backgroundColor: "#e4dfd6", marginTop: 10 }} />
         <View style={{ paddingHorizontal: 22, paddingTop: 8 }}>
           <Text style={{ fontSize: 26, fontWeight: "800", color: colors.ink }}>{mode === "login" ? "Welcome Back" : "Create Account"}</Text>
@@ -159,10 +160,10 @@ export function LoginScreen(_props: { onBrowse: () => void }) {
             <Text onPress={() => setMode(mode === "login" ? "signup" : "login")} style={{ color: green, fontWeight: "800" }}>{mode === "login" ? "Sign Up" : "Login"}</Text>
           </Text>
         </View>
-        </ScrollView>
+        </KeyboardFormScroll>
       </Animated.View>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }
 
@@ -177,6 +178,7 @@ function AuthField({ label, ...props }: { label: string } & TextInputProps) {
         onFocus={(event) => {
           setFocused(true);
           props.onFocus?.(event);
+          requestScrollFocusedInput();
         }}
         onBlur={(event) => {
           setFocused(false);

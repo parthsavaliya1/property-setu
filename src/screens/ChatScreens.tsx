@@ -3,8 +3,9 @@ import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Image, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardScreen, useKeyboardOverlap } from "../components/keyboard";
 import { io, type Socket } from "socket.io-client";
 import { ListSkeleton } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
@@ -179,6 +180,7 @@ export function ChatsScreen({ onOpen }: { onOpen: (id: string) => void }) {
 export function ChatScreen({ conversationId, propertyId, buyerId }: { conversationId?: string; propertyId?: string; buyerId?: string }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const keyboardOverlap = useKeyboardOverlap();
   const { token, session } = useAuth();
   const [threadId, setThreadId] = useState(conversationId);
   const [thread, setThread] = useState<ChatThread | null>(null);
@@ -194,6 +196,12 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
   const [attachOpen, setAttachOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const mineId = session?.user.id;
+
+  useEffect(() => {
+    if (keyboardOverlap <= 0) return;
+    const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(timer);
+  }, [keyboardOverlap]);
   const canSend = Boolean(draft.trim() || pending) && !sending;
 
   useEffect(() => {
@@ -361,7 +369,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
 
   const name = thread?.other_name || "Chat";
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#EFE6DA" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardScreen style={{ backgroundColor: "#EFE6DA" }}>
       <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 8, paddingBottom: 10, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={8} style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
           <Ionicons name="arrow-back" size={24} color={colors.ink} />
@@ -482,7 +490,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
         </View>
       ) : null}
 
-      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 8, paddingTop: 6, paddingBottom: Math.max(insets.bottom, 8), backgroundColor: "#EFE6DA" }}>
+      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 8, paddingTop: 6, paddingBottom: keyboardOverlap > 0 ? 8 : Math.max(insets.bottom, 8), backgroundColor: "#EFE6DA" }}>
         <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-end", backgroundColor: colors.white, borderRadius: 24, paddingLeft: 6, paddingRight: 12, minHeight: 48 }}>
           <Pressable onPress={() => setAttachOpen((open) => !open)} disabled={sending} hitSlop={6} style={{ width: 40, height: 48, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name={attachOpen ? "close" : "attach"} size={24} color={colors.muted} />
@@ -552,6 +560,6 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
           ) : null}
         </Pressable>
       </Modal>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }

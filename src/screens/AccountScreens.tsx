@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
-import { Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput } from "../components/keyboard";
 import { PropertyGridCard, propertyGridCardWidth, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, EmptyState, Field, ListSkeleton, PageHeader, PropertyGridSkeleton, styles } from "../components/ui";
@@ -130,16 +131,16 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardScreen style={{ backgroundColor: colors.page }}>
       <PageHeader title="Wallet" />
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 28 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <KeyboardFormScroll contentContainerStyle={{ padding: 20, paddingBottom: 28 }}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.line }}>
           <Text style={{ color: colors.muted, fontWeight: "600" }}>Wallet balance</Text>
           <Text style={{ color: colors.ink, fontSize: 32, fontWeight: "800", marginTop: 6 }}>{inr(balance)}</Text>
           <Text style={{ color: colors.muted, marginTop: 8 }}>Listing fees are taken from this wallet.</Text>
         </View>
         <Text style={{ fontWeight: "800", color: colors.ink, marginTop: 24, marginBottom: 8 }}>Add money</Text>
-        <TextInput value={amount} onChangeText={setAmount} keyboardType="number-pad" placeholder="Amount in rupees" placeholderTextColor={colors.faint} style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, height: 52, color: colors.ink }} />
+        <TextInput value={amount} onChangeText={setAmount} onFocus={requestScrollFocusedInput} keyboardType="number-pad" placeholder="Amount in rupees" placeholderTextColor={colors.faint} style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, height: 52, color: colors.ink }} />
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
           {walletAmounts.map((value) => {
             const selected = amount === String(value);
@@ -163,8 +164,8 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
           <Ionicons name="chevron-forward" size={18} color={colors.primary} />
         </Pressable>
         {!token ? <Text style={{ color: colors.muted, marginTop: 12 }}>Sign in to use your wallet.</Text> : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardFormScroll>
+    </KeyboardScreen>
   );
 }
 
@@ -720,9 +721,9 @@ export function EditProfileScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardScreen style={{ backgroundColor: colors.page }}>
       <PageHeader title="Edit profile" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
+      <KeyboardFormScroll contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 12 }}>
           {saved ? <Text style={styles.ok}>{saved}</Text> : null}
           <Field label="Name" value={fullName} onChangeText={setFullName} />
@@ -730,8 +731,8 @@ export function EditProfileScreen() {
           <Field label="City" value={city} onChangeText={setCity} />
           <Button title="Save" onPress={save} />
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardFormScroll>
+    </KeyboardScreen>
   );
 }
 

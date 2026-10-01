@@ -3,6 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Dimensions, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { requestScrollFocusedInput } from "./keyboard";
 import { buttonShadow, cardShadow, colors } from "../theme";
 
 const brandLogo = require("../../assets/center-logo.png");
@@ -189,6 +190,7 @@ export function Field({ label, ...props }: { label?: string } & TextInputProps) 
         onFocus={(event) => {
           setFocused(true);
           props.onFocus?.(event);
+          requestScrollFocusedInput();
         }}
         onBlur={(event) => {
           setFocused(false);

@@ -2,7 +2,8 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal, PanResponder, Platform, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Animated, Dimensions, FlatList, Image, Linking, Modal, PanResponder, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { KeyboardScreen } from "../components/keyboard";
 import { PropertyGridCard, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { PropertyMap } from "../components/PropertyMap";
 import { DetailSkeleton, EmptyState, PageHeader, PropertyGridSkeleton, SkeletonBlock, styles } from "../components/ui";
@@ -438,7 +439,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardScreen style={{ backgroundColor: colors.page }}>
       <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 10, backgroundColor: colors.page, borderBottomWidth: 1, borderBottomColor: colors.line }}>
         <Text style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>Search</Text>
         <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -537,7 +538,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }
 
