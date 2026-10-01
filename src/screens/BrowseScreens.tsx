@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal, PanResponder, Platform, Pressable, ScrollView, Share, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Animated, Dimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal, PanResponder, Platform, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { PropertyGridCard, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { PropertyMap } from "../components/PropertyMap";
 import { DetailSkeleton, EmptyState, PageHeader, PropertyGridSkeleton, SkeletonBlock, styles } from "../components/ui";
@@ -87,6 +87,7 @@ export function HomeScreen({
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [unread, setUnread] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const cardWidth = (Dimensions.get("window").width - 20 * 2 - 12) / 2;
 
   const profileCity = cityName(me?.profile?.city);
@@ -112,23 +113,36 @@ export function HomeScreen({
     };
   }, [profileCity]);
 
-  useEffect(() => {
+  const loadHome = useCallback(async (mode: "load" | "refresh") => {
     if (!located) return;
-    let active = true;
-    setLoading(true);
-    const params = new URLSearchParams({ limit: "50" });
-    if (city) params.set("prefer_city", city);
-    api.properties(`?${params}`, token).then((rows) => {
-      if (active) setItems(rows);
-    }).catch((err) => {
-      if (active) setError(err.message);
-    }).finally(() => {
-      if (active) setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, [city, token, located]);
+    if (mode === "load") setLoading(true);
+    else setRefreshing(true);
+    try {
+      const params = new URLSearchParams({ limit: "50" });
+      if (city) params.set("prefer_city", city);
+      setItems(await api.properties(`?${params}`, token));
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not refresh");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [city, located, token]);
+
+  useEffect(() => {
+    loadHome("load");
+  }, [loadHome]);
+
+  const homeReady = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (!located) return;
+    if (!homeReady.current) {
+      homeReady.current = true;
+      return;
+    }
+    loadHome("refresh");
+  }, [loadHome, located]));
 
   useFocusEffect(useCallback(() => {
     if (!token) {
@@ -224,7 +238,7 @@ export function HomeScreen({
         <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => onSearch(query || "all")} placeholder="Search house, plot, land..." placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
       </View>
     </View>
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 28 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 28 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadHome("refresh")} tintColor={colors.primary} colors={[colors.primary]} />}>
       <View style={{ marginHorizontal: 20, marginTop: 24, backgroundColor: colors.card, borderRadius: 20, paddingTop: 16, paddingBottom: 4, borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {categories.map((item) => (
@@ -295,6 +309,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [items, setItems] = useState<PropertyCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (!initialQuery || initialQuery === "all") return;
@@ -330,10 +345,10 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     };
   }, [profileCity]);
 
-  useEffect(() => {
+  const loadSearch = useCallback(async (mode: "load" | "refresh") => {
     if (!located) return;
-    let active = true;
-    setLoading(true);
+    if (mode === "load") setLoading(true);
+    else setRefreshing(true);
     const params = new URLSearchParams();
     params.set("limit", "50");
     if (q.trim()) params.set("q", q.trim());
@@ -348,17 +363,29 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
       params.set("prefer_city", nearCity);
       params.set("city_first", "true");
     }
-    api.properties(`?${params.toString()}`, token).then((rows) => {
-      if (active) setItems(rows);
-    }).catch(() => {
-      if (active) setItems([]);
-    }).finally(() => {
-      if (active) setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, [q, listing, category, propertyType, price, bedrooms, token, nearCity, located]);
+    try {
+      setItems(await api.properties(`?${params.toString()}`, token));
+    } catch {
+      if (mode === "load") setItems([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [bedrooms, category, listing, located, nearCity, price, propertyType, q, token]);
+
+  useEffect(() => {
+    loadSearch("load");
+  }, [loadSearch]);
+
+  const searchReady = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (!located) return;
+    if (!searchReady.current) {
+      searchReady.current = true;
+      return;
+    }
+    loadSearch("refresh");
+  }, [loadSearch, located]));
 
   const shown = sortForSearch(
     [...items]
@@ -437,6 +464,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: 28, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadSearch("refresh")} tintColor={colors.primary} colors={[colors.primary]} />}
         renderItem={({ item }) => (
           <PropertyListCard
             item={item}
@@ -552,19 +580,15 @@ function LeVechChip({ label, active, onPress }: { label: string; active?: boolea
 export function MapScreen({ onOpen, showBack }: { onOpen: (id: string) => void; showBack?: boolean }) {
   const [items, setItems] = useState<PropertyCard[]>([]);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let active = true;
-    api.properties("?limit=50").then((rows) => {
-      if (active) setItems(rows);
-    }).catch(() => {
-      if (active) setItems([]);
-    }).finally(() => {
-      if (active) setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
+  const loadMap = useCallback(() => {
+    api.properties("?limit=50").then(setItems).catch(() => setItems([])).finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    loadMap();
+  }, [loadMap]);
+  useFocusEffect(useCallback(() => {
+    loadMap();
+  }, [loadMap]));
   const pins = items.filter((item) => item.latitude && item.longitude);
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>

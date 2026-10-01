@@ -413,10 +413,20 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
     else setStep(step - 1);
   }
 
+  function closeListing() {
+    navigation.goBack();
+  }
+
+  const closeButton = (
+    <Pressable onPress={closeListing} hitSlop={8} style={{ width: 46, height: 46, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}>
+      <Ionicons name="close" size={24} color={colors.ink} />
+    </Pressable>
+  );
+
   if (opening) {
     return (
       <View style={{ flex: 1, backgroundColor: page }}>
-        <PageHeader title={propertyId ? "Edit Property" : "List a Property"} onBack={leave} />
+        <PageHeader title={propertyId ? "Edit Property" : "List a Property"} onBack={leave} right={closeButton} />
         <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 16, gap: 12 }}>
           <SkeletonBlock height={8} radius={4} />
           <SkeletonBlock height={28} width="46%" radius={8} />
@@ -437,7 +447,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: page }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <PageHeader title={propertyId ? "Edit Property" : "List a Property"} onBack={leave} />
+      <PageHeader title={propertyId ? "Edit Property" : "List a Property"} onBack={leave} right={closeButton} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 24 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: green, alignItems: "center", justifyContent: "center" }}>

@@ -8,6 +8,7 @@ type FavoritesValue = {
   ready: boolean;
   isSaved: (id: string, fallback?: boolean) => boolean;
   toggle: (item: PropertyCard) => Promise<void>;
+  reload: () => Promise<void>;
 };
 
 const FavoritesContext = createContext<FavoritesValue | null>(null);
@@ -76,7 +77,18 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     }
   }, [ready, saved, token]);
 
-  const value = useMemo(() => ({ items, ready, isSaved, toggle }), [isSaved, items, ready, toggle]);
+  const reload = useCallback(async () => {
+    if (!token) return;
+    const rows = await api.favorites(token);
+    setItems(rows);
+    const next: Record<string, boolean> = {};
+    rows.forEach((row) => {
+      next[row.id] = true;
+    });
+    setSaved(next);
+  }, [token]);
+
+  const value = useMemo(() => ({ items, ready, isSaved, toggle, reload }), [isSaved, items, ready, reload, toggle]);
   return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>;
 }
 

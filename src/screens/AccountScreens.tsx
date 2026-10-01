@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { PropertyGridCard, propertyGridCardWidth, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -269,19 +269,23 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
   const [tab, setTab] = useState<(typeof listingTabs)[number]["id"]>("active");
   const [error, setError] = useState("");
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  function load() {
+  function load(quiet = false) {
     if (!token) {
       setLoading(false);
+      setRefreshing(false);
       return;
     }
-    setLoading(true);
+    if (quiet) setRefreshing(true);
+    else setLoading(true);
     api.properties("?mine=true&limit=50", token).then((rows) => {
       setItems(rows);
     }).catch((err) => {
       setError(err.message);
     }).finally(() => {
       setLoading(false);
+      setRefreshing(false);
     });
   }
 
@@ -328,7 +332,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <PageHeader title="My Properties" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} colors={[colors.primary]} />}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, maxHeight: 44, marginBottom: 16 }} contentContainerStyle={{ alignItems: "center" }}>
         {listingTabs.map((entry) => {
           const active = tab === entry.id;
@@ -385,8 +389,9 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
 export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
-  const { items, ready, toggle } = useFavorites();
+  const { items, ready, toggle, reload } = useFavorites();
   const loading = Boolean(token) && !ready;
+  const [refreshing, setRefreshing] = useState(false);
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
     <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 8 }}>
@@ -395,7 +400,7 @@ export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
         {!token ? "Sign in to see saved properties." : loading ? "Loading your saved homes" : `${items.length} ${items.length === 1 ? "property" : "properties"} saved`}
       </Text>
     </View>
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await reload(); } finally { setRefreshing(false); } }} tintColor={colors.primary} colors={[colors.primary]} />}>
       {loading ? <PropertyListSkeleton /> : null}
       {token && !loading && items.length === 0 ? <EmptyState kind="search" /> : null}
       {!loading ? items.map((item) => (
@@ -591,39 +596,39 @@ export function ProfileScreen({
   const [balance, setBalance] = useState(0);
   const [properties, setProperties] = useState<PropertyCard[]>([]);
   const [loading, setLoading] = useState(Boolean(token));
+  const [refreshing, setRefreshing] = useState(false);
   const cardWidth = propertyGridCardWidth();
 
-  useEffect(() => {
+  const loadProfile = useCallback(async (quiet = false) => {
     if (!token) {
       setBalance(0);
       setProperties([]);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
-    let active = true;
-    setLoading(true);
-    Promise.all([api.wallet(token), api.properties("?mine=true&limit=50", token)])
-      .then(([wallet, rows]) => {
-        if (!active) return;
-        setBalance(wallet.balance);
-        setProperties(rows);
-      })
-      .catch(() => {
-        if (!active) return;
-        setProperties([]);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+    if (quiet) setRefreshing(true);
+    else setLoading(true);
+    try {
+      const [wallet, rows] = await Promise.all([api.wallet(token), api.properties("?mine=true&limit=50", token)]);
+      setBalance(wallet.balance);
+      setProperties(rows);
+    } catch {
+      if (!quiet) setProperties([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [token]);
+
+  useEffect(() => {
+    loadProfile(false);
+  }, [loadProfile]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       {showBack ? <PageHeader title="Profile" /> : <View style={{ height: insets.top + 8 }} />}
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadProfile(true)} tintColor={colors.primary} colors={[colors.primary]} />}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }}>
           <View style={{ width: 64, height: 64, borderRadius: 32, overflow: "hidden", backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }}>
             {me?.profile?.avatar_url ? <Image source={{ uri: me.profile.avatar_url }} style={{ width: 64, height: 64 }} /> : <Ionicons name="person" size={28} color={colors.primary} />}
