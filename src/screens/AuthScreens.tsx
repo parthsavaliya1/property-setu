@@ -24,13 +24,14 @@ export function SplashScreen({ onDone }: { onDone: (hasSession: boolean, seen: b
     return () => clearTimeout(timer);
   }, [ready, session, onDone]);
 
+  const insets = useSafeAreaInsets();
   const { width, height } = Dimensions.get("window");
-  const logoWidth = Math.min(width * 0.72, 320);
+  const logoWidth = Math.min(width * 0.42, 180);
   return (
-    <View style={{ width, height, backgroundColor: colors.primaryDark, alignItems: "center", justifyContent: "center" }}>
+    <View style={{ width, height, backgroundColor: colors.primaryDark }}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <Image source={splashHouse} style={{ position: "absolute", top: 0, left: 0, width, height }} resizeMode="cover" />
-      <Image source={splashLogo} style={{ width: logoWidth, height: logoWidth * 0.54 }} resizeMode="contain" />
+      <Image source={splashLogo} style={{ width: logoWidth, height: logoWidth * (1024 / 1536), alignSelf: "center", marginTop: insets.top + 24 }} resizeMode="contain" />
     </View>
   );
 }
@@ -44,7 +45,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingHorizontal: 24, paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 20) }}>
       <StatusBar barStyle="dark-content" />
-      <Image source={onboardingLogo} style={{ width: 132, height: 70, alignSelf: "center" }} resizeMode="contain" />
+      <Image source={onboardingLogo} style={{ width: 88, height: 46, alignSelf: "flex-start" }} resizeMode="contain" />
       <Text style={{ marginTop: 18, fontSize: 40, lineHeight: 46, fontWeight: "800", color: colors.ink }}>{"Find. Explore.\nBuy. Rent."}</Text>
       <Text style={{ marginTop: 14, fontSize: 16, lineHeight: 22, color: colors.muted }}>Your next home is just a search away.</Text>
       <Image source={splashHouse} style={{ flex: 1, width: "100%", marginVertical: 12 }} resizeMode="contain" />
