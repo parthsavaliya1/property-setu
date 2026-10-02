@@ -9,6 +9,7 @@ import { RazorpayHost } from "./components/RazorpayCheckout";
 import { buttonShadow, colors } from "./theme";
 import { useAuth } from "./context/AuthContext";
 import { EditProfileScreen, FavoritesScreen, InquiriesScreen, MenuScreen, MyPropertiesScreen, NotificationsScreen, PaymentHistoryScreen, ProfileScreen, VisitsScreen, WalletScreen } from "./screens/AccountScreens";
+import { AboutScreen } from "./screens/AboutScreen";
 import { ChatScreen, ChatsScreen } from "./screens/ChatScreens";
 import { LoginScreen, OnboardingScreen, SplashScreen } from "./screens/AuthScreens";
 import { DetailsScreen, HomeScreen, MapScreen, SearchScreen } from "./screens/BrowseScreens";
@@ -32,6 +33,7 @@ export type RootStackParamList = {
   Chat: { conversationId?: string; propertyId?: string; buyerId?: string };
   Wallet: undefined;
   PaymentHistory: undefined;
+  About: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -153,6 +155,7 @@ function Tabs() {
         onInquiries={() => closeMenu(() => session ? navigationRef.navigate("Inquiries") : navigationRef.navigate("Login"))}
         onVisits={() => closeMenu(() => session ? navigationRef.navigate("Visits") : navigationRef.navigate("Login"))}
         onNotifications={() => closeMenu(() => session ? navigationRef.navigate("Notifications") : navigationRef.navigate("Login"))}
+        onAbout={() => closeMenu(() => navigationRef.navigate("About"))}
         onSignIn={() => closeMenu(() => navigationRef.navigate("Login"))}
       />
     </Modal>
@@ -242,6 +245,12 @@ export function RootNavigation() {
           <Stack.Screen name="Chat">{({ route }) => <ChatScreen conversationId={route.params?.conversationId} propertyId={route.params?.propertyId} buyerId={route.params?.buyerId} />}</Stack.Screen>
         <Stack.Screen name="Wallet">{() => <WalletScreen onHistory={() => navigationRef.navigate("PaymentHistory")} />}</Stack.Screen>
         <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} />
+        <Stack.Screen name="About">{() => (
+          <AboutScreen
+            onSignIn={() => navigationRef.navigate("Login")}
+            onDeleted={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })}
+          />
+        )}</Stack.Screen>
         </Stack.Navigator>
       </NavigationContainer>
       <Modal visible={Boolean(loginMessage)} transparent animationType="fade" onRequestClose={() => setLoginMessage(null)}>

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
-import { Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput } from "../components/keyboard";
 import { PropertyGridCard, propertyGridCardWidth, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,6 +20,7 @@ export function MenuScreen({
   onInquiries,
   onVisits,
   onNotifications,
+  onAbout,
   onSignIn,
 }: {
   onClose?: () => void;
@@ -29,6 +30,7 @@ export function MenuScreen({
   onInquiries: () => void;
   onVisits: () => void;
   onNotifications: () => void;
+  onAbout: () => void;
   onSignIn: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -41,6 +43,7 @@ export function MenuScreen({
     { label: "Inquiries", icon: "document-text-outline", onPress: onInquiries },
     { label: "Scheduled visits", icon: "calendar-outline", onPress: onVisits },
     { label: "Notifications", icon: "notifications-outline", onPress: onNotifications },
+    { label: "About us", icon: "information-circle-outline", onPress: onAbout },
   ];
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
@@ -262,6 +265,67 @@ function listingFee(item: PropertyCard) {
   return listingPrice(item.is_premium || item.listing_label === "Premium" ? "premium" : "standard", "month");
 }
 
+function DeletePropertyDialog({
+  title,
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  busy: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onCancel}>
+      <Pressable onPress={busy ? undefined : onCancel} style={{ flex: 1, backgroundColor: "rgba(28,28,28,0.45)", justifyContent: "center", paddingHorizontal: 28 }}>
+        <Pressable onPress={() => undefined} style={{ backgroundColor: colors.card, borderRadius: 18, padding: 20 }}>
+          <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#F8E8E6", alignItems: "center", justifyContent: "center", alignSelf: "center" }}>
+            <Ionicons name="trash-outline" size={24} color={colors.danger} />
+          </View>
+          <Text style={{ marginTop: 14, fontSize: 18, fontWeight: "800", color: colors.ink, textAlign: "center" }}>
+            {error ? "Could not delete property" : "Delete property"}
+          </Text>
+          <Text style={{ marginTop: 8, color: colors.muted, lineHeight: 20, textAlign: "center" }}>
+            {error || `Delete “${title}”? This removes the listing for everyone. This cannot be undone.`}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
+            <Pressable onPress={onCancel} disabled={busy} style={{ flex: 1, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, opacity: busy ? 0.6 : 1 }}>
+              <Text style={{ fontWeight: "700", color: colors.primary }}>{error ? "Close" : "Cancel"}</Text>
+            </Pressable>
+            {error ? null : (
+              <Pressable
+                onPress={onConfirm}
+                disabled={busy}
+                style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: 14, backgroundColor: pressed ? "#9A2E24" : colors.danger, alignItems: "center", justifyContent: "center", opacity: busy ? 0.7 : 1 })}
+              >
+                <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? "Deleting..." : "Delete"}</Text>
+              </Pressable>
+            )}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function propertyActions(item: PropertyCard, onEdit: (id: string) => void, onDelete: (item: PropertyCard) => void) {
+  return (
+    <View style={{ marginTop: 8, flexDirection: "row", gap: 6 }}>
+      <Pressable onPress={() => onEdit(item.id)} style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, paddingVertical: 6 }}>
+        <Ionicons name="create-outline" size={14} color={colors.primary} />
+        <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>Edit</Text>
+      </Pressable>
+      <Pressable onPress={() => onDelete(item)} style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 14, borderWidth: 1.5, borderColor: colors.danger, paddingVertical: 6 }}>
+        <Ionicons name="trash-outline" size={14} color={colors.danger} />
+        <Text style={{ color: colors.danger, fontWeight: "700", fontSize: 12 }}>Delete</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) => void; onEdit: (id: string) => void }) {
   const { token, session } = useAuth();
   const pay = useRazorpay();
@@ -271,6 +335,9 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
   const [error, setError] = useState("");
   const [payingId, setPayingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<PropertyCard | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   function load(quiet = false) {
     if (!token) {
@@ -328,6 +395,21 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
     }
   }
 
+  async function removeListing() {
+    if (!token || !pendingDelete) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api.deleteProperty(pendingDelete.id, token);
+      setItems((current) => current.filter((row) => row.id !== pendingDelete.id));
+      setPendingDelete(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const shown = items.filter((item) => matchesTab(item.status, tab));
   const cardWidth = propertyGridCardWidth();
   return (
@@ -362,10 +444,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
             corner={active ? <ActiveMark /> : undefined}
             footer={
               <View style={{ marginTop: 8, gap: 6 }}>
-                <Pressable onPress={() => onEdit(item.id)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, paddingVertical: 6 }}>
-                  <Ionicons name="create-outline" size={14} color={colors.primary} />
-                  <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>Edit</Text>
-                </Pressable>
+                {propertyActions(item, onEdit, (row) => { setDeleteError(""); setPendingDelete(row); })}
                 {needsPay ? (
                   <Pressable onPress={() => activate(item)} disabled={payingId === item.id} style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 6, alignItems: "center" }}>
                     <Text style={{ color: colors.white, fontWeight: "700", fontSize: 12 }}>{payingId === item.id ? "Please wait..." : `Pay ₹${listingFee(item)}`}</Text>
@@ -383,6 +462,15 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
       </View>
       ) : null}
       </ScrollView>
+      {pendingDelete ? (
+        <DeletePropertyDialog
+          title={pendingDelete.title}
+          busy={deleting}
+          error={deleteError}
+          onCancel={() => { if (!deleting) { setPendingDelete(null); setDeleteError(""); } }}
+          onConfirm={() => void removeListing()}
+        />
+      ) : null}
     </View>
   );
 }
@@ -598,6 +686,9 @@ export function ProfileScreen({
   const [properties, setProperties] = useState<PropertyCard[]>([]);
   const [loading, setLoading] = useState(Boolean(token));
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<PropertyCard | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const cardWidth = propertyGridCardWidth();
 
   const loadProfile = useCallback(async (quiet = false) => {
@@ -625,6 +716,21 @@ export function ProfileScreen({
   useEffect(() => {
     loadProfile(false);
   }, [loadProfile]);
+
+  async function removeListing() {
+    if (!token || !pendingDelete) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api.deleteProperty(pendingDelete.id, token);
+      setProperties((current) => current.filter((row) => row.id !== pendingDelete.id));
+      setPendingDelete(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -678,10 +784,7 @@ export function ProfileScreen({
                     corner={item.status === "published" ? <ActiveMark /> : undefined}
                     footer={
                       <View style={{ marginTop: 8, gap: 6 }}>
-                        <Pressable onPress={() => onEdit(item.id)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, paddingVertical: 6 }}>
-                          <Ionicons name="create-outline" size={14} color={colors.primary} />
-                          <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>Edit</Text>
-                        </Pressable>
+                        {propertyActions(item, onEdit, (row) => { setDeleteError(""); setPendingDelete(row); })}
                         {item.status !== "published" ? (
                           <View style={{ alignSelf: "flex-start", backgroundColor: "#F8EEDD", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
                             <Text style={{ color: colors.warning, fontWeight: "700", fontSize: 12 }}>{statusLabel(item.status)}</Text>
@@ -695,6 +798,16 @@ export function ProfileScreen({
             ) : null}
           </>
         )}
+
+        {pendingDelete ? (
+          <DeletePropertyDialog
+            title={pendingDelete.title}
+            busy={deleting}
+            error={deleteError}
+            onCancel={() => { if (!deleting) { setPendingDelete(null); setDeleteError(""); } }}
+            onConfirm={() => void removeListing()}
+          />
+        ) : null}
       </ScrollView>
     </View>
   );

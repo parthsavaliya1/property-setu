@@ -22,6 +22,7 @@ type AuthValue = {
   signUpEmail: (name: string, email: string, password: string) => Promise<string | null>;
   signInGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -95,6 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     },
     signOut: async () => {
+      await AsyncStorage.removeItem(SESSION_KEY);
+      setSession(null);
+      setMe(null);
+    },
+    deleteAccount: async () => {
+      if (!session?.access_token) throw new Error("Sign in required");
+      await api.deleteMe(session.access_token);
       await AsyncStorage.removeItem(SESSION_KEY);
       setSession(null);
       setMe(null);

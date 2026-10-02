@@ -751,6 +751,9 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
   const [expanded, setExpanded] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [zoomOpen, setZoomOpen] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const { width } = useWindowDimensions();
 
   useEffect(() => {
@@ -791,10 +794,26 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
     await toggle(item);
   }
 
+  async function removeListing() {
+    if (!token || !item) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api.deleteProperty(item.id, token);
+      setAskDelete(false);
+      navigation.goBack();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading && !item) return <DetailSkeleton />;
   if (!item) return <View style={[styles.body, { backgroundColor: "white", flex: 1 }]}><Text>{note || "This property is not available."}</Text></View>;
 
   const liked = isSaved(item.id, item.is_favorite);
+  const mine = item.owner_id === session?.user.id;
   const photos = (item.images?.length
     ? item.images.filter((image) => image.image_type !== "video").map((image) => image.image_url)
     : [item.cover_image]
@@ -835,7 +854,10 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
           ) : null}
           <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + 8, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <RoundIcon name="chevron-back" onPress={() => navigation.goBack()} />
-            <RoundIcon name="share-social-outline" onPress={() => Share.share({ message: `${item.title}\n${place}\n${inr(item.price)}` })} />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {mine ? <RoundIcon name="trash-outline" onPress={() => { setDeleteError(""); setAskDelete(true); }} /> : null}
+              <RoundIcon name="share-social-outline" onPress={() => Share.share({ message: `${item.title}\n${place}\n${inr(item.price)}` })} />
+            </View>
           </View>
           {photos.length > 1 ? (
             <View pointerEvents="none" style={{ position: "absolute", bottom: 14, left: 0, right: 0, alignItems: "center" }}>
@@ -943,6 +965,29 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
         </View>
       </View>
       {zoomOpen && photos.length ? <PhotoZoom photos={photos} startIndex={photoIndex} onClose={() => setZoomOpen(false)} /> : null}
+      {askDelete ? (
+        <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={() => { if (!deleting) setAskDelete(false); }}>
+          <Pressable onPress={deleting ? undefined : () => setAskDelete(false)} style={{ flex: 1, backgroundColor: "rgba(28,28,28,0.45)", justifyContent: "center", paddingHorizontal: 28 }}>
+            <Pressable onPress={() => undefined} style={{ backgroundColor: colors.card, borderRadius: 18, padding: 20 }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#F8E8E6", alignItems: "center", justifyContent: "center", alignSelf: "center" }}>
+                <Ionicons name="trash-outline" size={24} color={colors.danger} />
+              </View>
+              <Text style={{ marginTop: 14, fontSize: 18, fontWeight: "800", color: colors.ink, textAlign: "center" }}>{deleteError ? "Could not delete property" : "Delete property"}</Text>
+              <Text style={{ marginTop: 8, color: colors.muted, lineHeight: 20, textAlign: "center" }}>{deleteError || `Delete “${item.title}”? This removes the listing for everyone. This cannot be undone.`}</Text>
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
+                <Pressable onPress={() => { setAskDelete(false); setDeleteError(""); }} disabled={deleting} style={{ flex: 1, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, alignItems: "center", justifyContent: "center", opacity: deleting ? 0.6 : 1 }}>
+                  <Text style={{ fontWeight: "700", color: colors.primary }}>{deleteError ? "Close" : "Cancel"}</Text>
+                </Pressable>
+                {deleteError ? null : (
+                  <Pressable onPress={() => void removeListing()} disabled={deleting} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: 14, backgroundColor: pressed ? "#9A2E24" : colors.danger, alignItems: "center", justifyContent: "center", opacity: deleting ? 0.7 : 1 })}>
+                    <Text style={{ color: colors.white, fontWeight: "700" }}>{deleting ? "Deleting..." : "Delete"}</Text>
+                  </Pressable>
+                )}
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      ) : null}
     </View>
   );
 }

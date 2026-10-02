@@ -154,6 +154,8 @@ export const api = {
   updateProperty: (id: string, payload: unknown, token: string) =>
     request<PropertyDetail>(`/properties/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, token),
   archiveProperty: (id: string, token: string) => request(`/properties/${id}`, { method: "DELETE" }, token),
+  deleteProperty: (id: string, token: string) =>
+    request<{ id: string; archived: boolean }>(`/properties/${id}?hard=true`, { method: "DELETE" }, token),
   view: (id: string, deviceType: string, token?: string | null) =>
     request(`/properties/${id}/view`, { method: "POST", body: JSON.stringify({ device_type: deviceType }) }, token),
   favorite: (id: string, token: string) => request(`/properties/${id}/favorite`, { method: "POST" }, token),
@@ -173,6 +175,7 @@ export const api = {
     request(`/properties/${id}/reports`, { method: "POST", body: JSON.stringify(payload) }, token),
   me: (token: string) => request<Me>("/me", {}, token),
   updateMe: (payload: unknown, token: string) => request("/me", { method: "PATCH", body: JSON.stringify(payload) }, token),
+  deleteMe: (token: string) => request<void>("/me", { method: "DELETE" }, token),
   notifications: (token: string) => request<NotificationItem[]>("/notifications", {}, token),
   readNotification: (id: string, token: string) => request(`/notifications/${id}/read`, { method: "PATCH" }, token),
   readNotifications: (token: string) => request<void>("/notifications/read", { method: "PATCH" }, token),
