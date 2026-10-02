@@ -64,7 +64,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function LoginScreen(_props: { onBrowse: () => void }) {
+export function LoginScreen({ onBrowse }: { onBrowse: () => void }) {
   const auth = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
@@ -114,12 +114,20 @@ export function LoginScreen(_props: { onBrowse: () => void }) {
     setInfo("Use the password you saved when you created the account.");
   }
 
+  const insets = useSafeAreaInsets();
   const { width, height } = Dimensions.get("window");
   const sheetWidth = Math.min(width, 430);
   return (
     <KeyboardScreen style={{ backgroundColor: "#c4b29a" }}>
       <StatusBar barStyle="light-content" />
       <Image source={loginBg} style={{ position: "absolute", top: 0, left: 0, width, height }} resizeMode="cover" />
+      <Pressable
+        onPress={onBrowse}
+        hitSlop={8}
+        style={{ position: "absolute", top: insets.top + 10, right: 16, zIndex: 2, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 }}
+      >
+        <Text style={{ color: green, fontWeight: "700", fontSize: 15 }}>Skip</Text>
+      </Pressable>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
       <Animated.View style={{ alignSelf: "center", width: sheetWidth, maxHeight: height - 72, flexShrink: 1, backgroundColor: "white", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", transform: [{ translateY: slide }] }}>
         <KeyboardFormScroll bounces={false} style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
