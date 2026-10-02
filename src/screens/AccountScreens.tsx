@@ -1,13 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
-import { Image, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput } from "../components/keyboard";
 import { PropertyGridCard, propertyGridCardWidth, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, EmptyState, Field, ListSkeleton, PageHeader, PropertyGridSkeleton, styles } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { useFavorites } from "../context/FavoritesContext";
-import { api, inr, listingPrice } from "../lib/api";
+import { api, inr, listingPrice, PROPERTY_PAGE_SIZE } from "../lib/api";
+import { nearScrollEnd, usePagedProperties } from "../lib/paging";
 import { useRazorpay } from "../components/RazorpayCheckout";
 import { buttonShadow, colors } from "../theme";
 import type { Inquiry, NotificationItem, PropertyCard, Visit, WalletTransaction } from "../types/database";
@@ -329,42 +330,29 @@ function propertyActions(item: PropertyCard, onEdit: (id: string) => void, onDel
 export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) => void; onEdit: (id: string) => void }) {
   const { token, session } = useAuth();
   const pay = useRazorpay();
-  const [items, setItems] = useState<PropertyCard[]>([]);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<(typeof listingTabs)[number]["id"]>("active");
-  const [error, setError] = useState("");
   const [payingId, setPayingId] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [payError, setPayError] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PropertyCard | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-
-  function load(quiet = false) {
-    if (!token) {
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-    if (quiet) setRefreshing(true);
-    else setLoading(true);
-    api.properties("?mine=true&limit=50", token).then((rows) => {
-      setItems(rows);
-    }).catch((err) => {
-      setError(err.message);
-    }).finally(() => {
-      setLoading(false);
-      setRefreshing(false);
-    });
-  }
+  const page = usePagedProperties(
+    (offset) => api.properties(`?mine=true&limit=${PROPERTY_PAGE_SIZE}&offset=${offset}`, token || undefined),
+    token || "",
+    Boolean(token),
+  );
+  const { items, setItems, loading, refreshing, loadingMore, hasMore, error, refresh, loadMore } = page;
 
   useEffect(() => {
-    load();
-  }, [token]);
+    if (!token || loading || loadingMore || !hasMore || error) return;
+    const visible = items.filter((item) => matchesTab(item.status, tab));
+    if (visible.length < 8) loadMore();
+  }, [error, hasMore, items, loadMore, loading, loadingMore, tab, token]);
 
   async function activate(item: PropertyCard) {
     if (!token) return;
     const badge = item.is_premium || item.listing_label === "Premium" ? "premium" : "standard";
-    setError("");
+    setPayError("");
     setPayingId(item.id);
     try {
       const fee = listingPrice(badge, "month");
@@ -387,9 +375,9 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
       }
       await api.walletSpend(item.id, badge, "month", token);
       setTab("active");
-      load();
+      refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Payment failed");
+      setPayError(err instanceof Error ? err.message : "Payment failed");
     } finally {
       setPayingId(null);
     }
@@ -415,7 +403,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <PageHeader title="My Properties" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} colors={[colors.primary]} />}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false} scrollEventThrottle={16} onScroll={(event) => { if (nearScrollEnd(event)) loadMore(); }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refresh()} tintColor={colors.primary} colors={[colors.primary]} />}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, maxHeight: 44, marginBottom: 16 }} contentContainerStyle={{ alignItems: "center" }}>
         {listingTabs.map((entry) => {
           const active = tab === entry.id;
@@ -426,7 +414,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
           );
         })}
       </ScrollView>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error || payError ? <Text style={styles.error}>{payError || error}</Text> : null}
       {!token ? <Text style={styles.meta}>Sign in to see your listings.</Text> : null}
       {token && loading ? <PropertyGridSkeleton width={cardWidth} /> : null}
       {token && !loading && shown.length === 0 ? <EmptyState kind={tab === "active" ? "active" : "search"} /> : null}
@@ -461,6 +449,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
       })}
       </View>
       ) : null}
+      {loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} /> : null}
       </ScrollView>
       {pendingDelete ? (
         <DeletePropertyDialog
@@ -478,7 +467,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
 export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
-  const { items, ready, toggle, reload } = useFavorites();
+  const { items, ready, toggle, reload, loadMore, loadingMore } = useFavorites();
   const loading = Boolean(token) && !ready;
   const [refreshing, setRefreshing] = useState(false);
   return (
@@ -489,7 +478,7 @@ export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
         {!token ? "Sign in to see saved properties." : loading ? "Loading your saved homes" : `${items.length} ${items.length === 1 ? "property" : "properties"} saved`}
       </Text>
     </View>
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await reload(); } finally { setRefreshing(false); } }} tintColor={colors.primary} colors={[colors.primary]} />}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false} scrollEventThrottle={16} onScroll={(event) => { if (nearScrollEnd(event)) loadMore(); }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await reload(); } finally { setRefreshing(false); } }} tintColor={colors.primary} colors={[colors.primary]} />}>
       {loading ? <PropertyListSkeleton /> : null}
       {token && !loading && items.length === 0 ? <EmptyState kind="search" /> : null}
       {!loading ? items.map((item) => (
@@ -501,6 +490,7 @@ export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
           onSave={() => toggle(item)}
         />
       )) : null}
+      {loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} /> : null}
     </ScrollView>
     </View>
   );
@@ -683,39 +673,42 @@ export function ProfileScreen({
   const { me, token, session } = useAuth();
   const insets = useSafeAreaInsets();
   const [balance, setBalance] = useState(0);
-  const [properties, setProperties] = useState<PropertyCard[]>([]);
-  const [loading, setLoading] = useState(Boolean(token));
-  const [refreshing, setRefreshing] = useState(false);
+  const [walletLoading, setWalletLoading] = useState(Boolean(token));
+  const [walletRefreshing, setWalletRefreshing] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<PropertyCard | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const cardWidth = propertyGridCardWidth();
+  const propertiesPage = usePagedProperties(
+    (offset) => api.properties(`?mine=true&limit=${PROPERTY_PAGE_SIZE}&offset=${offset}`, token || undefined),
+    token || "",
+    Boolean(token),
+  );
+  const properties = propertiesPage.items;
+  const loading = propertiesPage.loading || walletLoading;
 
-  const loadProfile = useCallback(async (quiet = false) => {
+  const loadWallet = useCallback(async (quiet = false) => {
     if (!token) {
       setBalance(0);
-      setProperties([]);
-      setLoading(false);
-      setRefreshing(false);
+      setWalletLoading(false);
+      setWalletRefreshing(false);
       return;
     }
-    if (quiet) setRefreshing(true);
-    else setLoading(true);
+    if (quiet) setWalletRefreshing(true);
+    else setWalletLoading(true);
     try {
-      const [wallet, rows] = await Promise.all([api.wallet(token), api.properties("?mine=true&limit=50", token)]);
-      setBalance(wallet.balance);
-      setProperties(rows);
+      setBalance((await api.wallet(token)).balance);
     } catch {
-      if (!quiet) setProperties([]);
+      if (!quiet) setBalance(0);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setWalletLoading(false);
+      setWalletRefreshing(false);
     }
   }, [token]);
 
   useEffect(() => {
-    loadProfile(false);
-  }, [loadProfile]);
+    loadWallet(false);
+  }, [loadWallet]);
 
   async function removeListing() {
     if (!token || !pendingDelete) return;
@@ -723,7 +716,7 @@ export function ProfileScreen({
     setDeleteError("");
     try {
       await api.deleteProperty(pendingDelete.id, token);
-      setProperties((current) => current.filter((row) => row.id !== pendingDelete.id));
+      propertiesPage.setItems((current) => current.filter((row) => row.id !== pendingDelete.id));
       setPendingDelete(null);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Try again.");
@@ -735,7 +728,7 @@ export function ProfileScreen({
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       {showBack ? <PageHeader title="Profile" /> : <View style={{ height: insets.top + 8 }} />}
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadProfile(true)} tintColor={colors.primary} colors={[colors.primary]} />}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false} scrollEventThrottle={16} onScroll={(event) => { if (nearScrollEnd(event)) propertiesPage.loadMore(); }} refreshControl={<RefreshControl refreshing={walletRefreshing || propertiesPage.refreshing} onRefresh={() => { loadWallet(true); propertiesPage.refresh(); }} tintColor={colors.primary} colors={[colors.primary]} />}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }}>
           <View style={{ width: 64, height: 64, borderRadius: 32, overflow: "hidden", backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }}>
             {me?.profile?.avatar_url ? <Image source={{ uri: me.profile.avatar_url }} style={{ width: 64, height: 64 }} /> : <Ionicons name="person" size={28} color={colors.primary} />}
@@ -796,6 +789,7 @@ export function ProfileScreen({
                 ))}
               </View>
             ) : null}
+            {propertiesPage.loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} /> : null}
           </>
         )}
 

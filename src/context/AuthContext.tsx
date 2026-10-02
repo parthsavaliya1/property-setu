@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { AppState } from "react-native";
 import { api, type AuthUser } from "../lib/api";
+import { loadRemoteConfig } from "../lib/remoteConfig";
 import { getSupabase, startOAuth } from "../lib/supabase";
 import type { Me } from "../types/database";
 
@@ -34,21 +36,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    AsyncStorage.getItem(SESSION_KEY).then((raw) => {
-      if (!active) return;
-      if (raw) {
-        try {
-          setSession(JSON.parse(raw) as AppSession);
-        } catch {
-          setSession(null);
+    Promise.race([
+      loadRemoteConfig(),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
+    ])
+      .catch(() => undefined)
+      .then(() => AsyncStorage.getItem(SESSION_KEY))
+      .then((raw) => {
+        if (!active) return;
+        if (raw) {
+          try {
+            setSession(JSON.parse(raw) as AppSession);
+          } catch {
+            setSession(null);
+          }
         }
-      }
-      setReady(true);
-    }).catch(() => {
-      if (active) setReady(true);
+        setReady(true);
+      })
+      .catch(() => {
+        if (active) setReady(true);
+      });
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") loadRemoteConfig().catch(() => undefined);
     });
     return () => {
       active = false;
+      subscription.remove();
     };
   }, []);
 

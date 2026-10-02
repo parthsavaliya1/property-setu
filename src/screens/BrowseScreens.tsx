@@ -2,14 +2,15 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, FlatList, Image, Linking, Modal, PanResponder, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Linking, Modal, PanResponder, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { KeyboardScreen } from "../components/keyboard";
 import { PropertyGridCard, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { PropertyMap } from "../components/PropertyMap";
 import { DetailSkeleton, EmptyState, PageHeader, PropertyGridSkeleton, SkeletonBlock, styles } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { useFavorites } from "../context/FavoritesContext";
-import { api, cityName, inr, listingLabel, sortForSearch } from "../lib/api";
+import { api, cityName, inr, listingLabel, PROPERTY_PAGE_SIZE, sortForSearch } from "../lib/api";
+import { nearScrollEnd, usePagedProperties } from "../lib/paging";
 import { readCurrentPlace } from "../lib/location";
 import { useRequireLogin } from "../context/LoginGate";
 import { buttonShadow, cardShadow, colors } from "../theme";
@@ -83,12 +84,8 @@ export function HomeScreen({
   const { me, token } = useAuth();
   const { isSaved, toggle } = useFavorites();
   const requireLogin = useRequireLogin();
-  const [items, setItems] = useState<PropertyCard[]>([]);
-  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [error, setError] = useState("");
   const [unread, setUnread] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
   const cardWidth = (Dimensions.get("window").width - 20 * 2 - 12) / 2;
 
   const profileCity = cityName(me?.profile?.city);
@@ -114,36 +111,31 @@ export function HomeScreen({
     };
   }, [profileCity]);
 
-  const loadHome = useCallback(async (mode: "load" | "refresh") => {
-    if (!located) return;
-    if (mode === "load") setLoading(true);
-    else setRefreshing(true);
-    try {
-      const params = new URLSearchParams({ limit: "50" });
-      if (city) params.set("prefer_city", city);
-      setItems(await api.properties(`?${params}`, token));
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not refresh");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [city, located, token]);
+  const loadTier = useCallback((tier: "premium" | "standard", offset: number) => {
+    const params = new URLSearchParams({
+      limit: String(PROPERTY_PAGE_SIZE),
+      offset: String(offset),
+      listing_tier: tier,
+    });
+    if (city) params.set("prefer_city", city);
+    return api.properties(`?${params}`, token);
+  }, [city, token]);
 
-  useEffect(() => {
-    loadHome("load");
-  }, [loadHome]);
-
-  const homeReady = useRef(false);
-  useFocusEffect(useCallback(() => {
-    if (!located) return;
-    if (!homeReady.current) {
-      homeReady.current = true;
-      return;
-    }
-    loadHome("refresh");
-  }, [loadHome, located]));
+  const premiumPage = usePagedProperties(
+    (offset) => loadTier("premium", offset),
+    `${located}|${city}|${token || ""}|premium`,
+    located,
+    (rows, mode) => (mode === "more" ? rows : shuffleList(rows)),
+  );
+  const simplePage = usePagedProperties(
+    (offset) => loadTier("standard", offset),
+    `${located}|${city}|${token || ""}|standard`,
+    located,
+    (rows, mode) => (mode === "more" ? rows : shuffleList(rows)),
+  );
+  const loading = located && (premiumPage.loading || simplePage.loading) && premiumPage.items.length === 0 && simplePage.items.length === 0;
+  const refreshing = premiumPage.refreshing || simplePage.refreshing;
+  const error = premiumPage.error || simplePage.error;
 
   useFocusEffect(useCallback(() => {
     if (!token) {
@@ -175,25 +167,8 @@ export function HomeScreen({
     await toggle(item);
   }
 
-  const [premiumItems, setPremiumItems] = useState<PropertyCard[]>([]);
-  const [simpleItems, setSimpleItems] = useState<PropertyCard[]>([]);
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
-
-  const arrangeHome = useCallback((source: PropertyCard[]) => {
-    const premium = shuffleList(source.filter((item) => item.is_premium || item.listing_label === "Premium"));
-    const simple = shuffleList(source.filter((item) => !item.is_premium && item.listing_label !== "Premium")).slice(0, 10);
-    setPremiumItems(premium);
-    setSimpleItems(simple);
-  }, []);
-
-  useEffect(() => {
-    arrangeHome(items);
-  }, [items, arrangeHome]);
-
-  useFocusEffect(useCallback(() => {
-    arrangeHome(itemsRef.current);
-  }, [arrangeHome]));
+  const premiumItems = premiumPage.items;
+  const simpleItems = simplePage.items;
   const page = colors.page;
 
   function propertyCard(item: PropertyCard, width: number) {
@@ -239,7 +214,16 @@ export function HomeScreen({
         <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => onSearch(query || "all")} placeholder="Search house, plot, land..." placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
       </View>
     </View>
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 28 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadHome("refresh")} tintColor={colors.primary} colors={[colors.primary]} />}>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingBottom: 28 }}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+      showsVerticalScrollIndicator={false}
+      scrollEventThrottle={16}
+      onScroll={(event) => { if (nearScrollEnd(event)) simplePage.loadMore(); }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { premiumPage.refresh(); simplePage.refresh(); }} tintColor={colors.primary} colors={[colors.primary]} />}
+    >
       <View style={{ marginHorizontal: 20, marginTop: 24, backgroundColor: colors.card, borderRadius: 20, paddingTop: 16, paddingBottom: 4, borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {categories.map((item) => (
@@ -269,8 +253,9 @@ export function HomeScreen({
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 20, marginTop: 28, marginBottom: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>Premium Properties</Text>
           </View>
-          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
+          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }} scrollEventThrottle={16} onScroll={(event) => { if (nearScrollEnd(event, "x")) premiumPage.loadMore(); }}>
             {premiumItems.map((item) => propertyCard(item, cardWidth))}
+            {premiumPage.loadingMore ? <ActivityIndicator color={colors.primary} style={{ alignSelf: "center", width: 36 }} /> : null}
           </ScrollView>
         </>
       ) : null}
@@ -286,6 +271,7 @@ export function HomeScreen({
           {simpleItems.map((item) => propertyCard(item, cardWidth))}
         </View>
       ) : null}
+      {simplePage.loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} /> : null}
     </ScrollView>
     </View>
   );
@@ -308,9 +294,32 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   const [withPhotos, setWithPhotos] = useState(false);
   const [sort, setSort] = useState("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [items, setItems] = useState<PropertyCard[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const loadSearchPage = useCallback((offset: number) => {
+    const params = new URLSearchParams({
+      limit: String(PROPERTY_PAGE_SIZE),
+      offset: String(offset),
+    });
+    if (q.trim()) params.set("q", q.trim());
+    if (listing) params.set("listing_type", listing);
+    const activeCategory = propertyType || category;
+    if (activeCategory) params.set("category", activeCategory);
+    const range = priceRanges.find((item) => item.id === price);
+    if (range?.min != null) params.set("min_price", String(range.min));
+    if (range?.max != null) params.set("max_price", String(range.max));
+    if (bedrooms) params.set("bedrooms", bedrooms === "4" ? "4" : bedrooms);
+    if (nearCity) {
+      params.set("prefer_city", nearCity);
+      params.set("city_first", "true");
+    }
+    return api.properties(`?${params.toString()}`, token);
+  }, [bedrooms, category, listing, nearCity, price, propertyType, q, token]);
+
+  const searchPage = usePagedProperties(
+    loadSearchPage,
+    `${located}|${q}|${listing}|${category}|${propertyType}|${price}|${bedrooms}|${nearCity}|${token || ""}`,
+    located,
+  );
+  const { items, loading, refreshing } = searchPage;
 
   useEffect(() => {
     if (!initialQuery || initialQuery === "all") return;
@@ -345,48 +354,6 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
       active = false;
     };
   }, [profileCity]);
-
-  const loadSearch = useCallback(async (mode: "load" | "refresh") => {
-    if (!located) return;
-    if (mode === "load") setLoading(true);
-    else setRefreshing(true);
-    const params = new URLSearchParams();
-    params.set("limit", "50");
-    if (q.trim()) params.set("q", q.trim());
-    if (listing) params.set("listing_type", listing);
-    const activeCategory = propertyType || category;
-    if (activeCategory) params.set("category", activeCategory);
-    const range = priceRanges.find((item) => item.id === price);
-    if (range?.min != null) params.set("min_price", String(range.min));
-    if (range?.max != null) params.set("max_price", String(range.max));
-    if (bedrooms) params.set("bedrooms", bedrooms === "4" ? "4" : bedrooms);
-    if (nearCity) {
-      params.set("prefer_city", nearCity);
-      params.set("city_first", "true");
-    }
-    try {
-      setItems(await api.properties(`?${params.toString()}`, token));
-    } catch {
-      if (mode === "load") setItems([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [bedrooms, category, listing, located, nearCity, price, propertyType, q, token]);
-
-  useEffect(() => {
-    loadSearch("load");
-  }, [loadSearch]);
-
-  const searchReady = useRef(false);
-  useFocusEffect(useCallback(() => {
-    if (!located) return;
-    if (!searchReady.current) {
-      searchReady.current = true;
-      return;
-    }
-    loadSearch("refresh");
-  }, [loadSearch, located]));
 
   const shown = sortForSearch(
     [...items]
@@ -465,7 +432,10 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: 28, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadSearch("refresh")} tintColor={colors.primary} colors={[colors.primary]} />}
+        onEndReached={() => searchPage.loadMore()}
+        onEndReachedThreshold={0.4}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => searchPage.refresh()} tintColor={colors.primary} colors={[colors.primary]} />}
+        ListFooterComponent={searchPage.loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} /> : null}
         renderItem={({ item }) => (
           <PropertyListCard
             item={item}
@@ -581,15 +551,9 @@ function LeVechChip({ label, active, onPress }: { label: string; active?: boolea
 export function MapScreen({ onOpen, showBack }: { onOpen: (id: string) => void; showBack?: boolean }) {
   const [items, setItems] = useState<PropertyCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const loadMap = useCallback(() => {
-    api.properties("?limit=50").then(setItems).catch(() => setItems([])).finally(() => setLoading(false));
-  }, []);
   useEffect(() => {
-    loadMap();
-  }, [loadMap]);
-  useFocusEffect(useCallback(() => {
-    loadMap();
-  }, [loadMap]));
+    api.properties(`?limit=${PROPERTY_PAGE_SIZE}`).then(setItems).catch(() => setItems([])).finally(() => setLoading(false));
+  }, []);
   const pins = items.filter((item) => item.latitude && item.longitude);
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>

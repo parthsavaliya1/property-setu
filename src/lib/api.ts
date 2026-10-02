@@ -1,6 +1,16 @@
 import Constants from "expo-constants";
 import { File } from "expo-file-system";
 import type { Category, ChatMessage, ChatThread, Inquiry, Me, NotificationItem, PropertyCard, PropertyDetail, Visit, WalletTransaction } from "../types/database";
+import { getRemoteSettings } from "./remoteConfig";
+
+export const PROPERTY_PAGE_SIZE = 20;
+
+export function appendProperties(current: PropertyCard[], next: PropertyCard[]) {
+  if (!next.length) return current;
+  const seen = new Set(current.map((item) => item.id));
+  const extra = next.filter((item) => !seen.has(item.id));
+  return extra.length ? [...current, ...extra] : current;
+}
 
 function usableHost(value?: string | null) {
   if (!value) return null;
@@ -15,6 +25,8 @@ function usableHost(value?: string | null) {
 const DEFAULT_API_URL = "http://192.168.1.10:4000";
 
 export function apiBase() {
+  const remote = getRemoteSettings().apiUrl;
+  if (remote) return remote;
   const configured = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
   if (configured && !configured.includes("://0.0.0.0")) return configured;
   const host = usableHost(Constants.expoConfig?.hostUri) || usableHost(Constants.linkingUri);
@@ -120,7 +132,8 @@ export async function uploadMedia(
 }
 
 export function listingPrice(badge: "standard" | "premium", term: "month" | "year") {
-  const monthly = badge === "premium" ? 30 : 20;
+  const fees = getRemoteSettings();
+  const monthly = badge === "premium" ? fees.premiumPrice : fees.standardPrice;
   return term === "year" ? Math.round(monthly * 12 * 0.85) : monthly;
 }
 
@@ -160,7 +173,7 @@ export const api = {
     request(`/properties/${id}/view`, { method: "POST", body: JSON.stringify({ device_type: deviceType }) }, token),
   favorite: (id: string, token: string) => request(`/properties/${id}/favorite`, { method: "POST" }, token),
   unfavorite: (id: string, token: string) => request(`/properties/${id}/favorite`, { method: "DELETE" }, token),
-  favorites: (token: string) => request<PropertyCard[]>("/favorites", {}, token),
+  favorites: (token: string, query = "") => request<PropertyCard[]>(`/favorites${query}`, {}, token),
   inquire: (id: string, payload: unknown, token: string) =>
     request(`/properties/${id}/inquiries`, { method: "POST", body: JSON.stringify(payload) }, token),
   inquiries: (token: string) => request<Inquiry[]>("/inquiries", {}, token),

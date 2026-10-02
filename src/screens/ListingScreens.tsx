@@ -58,9 +58,16 @@ const documents = [
 ] as const;
 
 const listingPlans = [
-  { id: "standard" as const, title: "Regular", detail: "₹20 for 1 month, or ₹204 for 1 year after 15% off.", tag: "" },
-  { id: "premium" as const, title: "Premium", detail: "₹30 for 1 month, or ₹306 for 1 year after 15% off. Shows first on the home page.", tag: "Premium" },
+  { id: "standard" as const, title: "Regular", tag: "" },
+  { id: "premium" as const, title: "Premium", tag: "Premium" },
 ];
+
+function planDetail(id: "standard" | "premium") {
+  const month = listingPrice(id, "month");
+  const year = listingPrice(id, "year");
+  const priceText = `₹${month} for 1 month, or ₹${year} for 1 year after 15% off.`;
+  return id === "premium" ? `${priceText} Shows first on the home page.` : priceText;
+}
 
 function listingNeedsPayment(
   status: string,
@@ -620,7 +627,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
                   <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={22} color={selected ? green : "#c5c5c5"} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontWeight: "800", color: colors.ink }}>{plan.title}</Text>
-                    <Text style={{ color: "#8a918c", marginTop: 2 }}>{plan.detail}</Text>
+                    <Text style={{ color: "#8a918c", marginTop: 2 }}>{planDetail(plan.id)}</Text>
                   </View>
                   {credited ? <Text style={{ color: "#8a918c", fontWeight: "700" }}>{inr(priceNow)} now</Text> : plan.tag ? <View style={{ backgroundColor: "#f8e7c0", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ color: "#8a5a12", fontWeight: "800", fontSize: 12 }}>{plan.tag}</Text></View> : <Text style={{ color: "#8a918c", fontWeight: "700" }}>{inr(full)}</Text>}
                 </Pressable>
