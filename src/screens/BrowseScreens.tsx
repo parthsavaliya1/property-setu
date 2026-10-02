@@ -11,7 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import { useFavorites } from "../context/FavoritesContext";
 import { api, cityName, inr, listingLabel, PROPERTY_PAGE_SIZE, sortForSearch } from "../lib/api";
 import { nearScrollEnd, usePagedProperties } from "../lib/paging";
-import { readCurrentPlace } from "../lib/location";
+import { useBrowseCity } from "../lib/location";
 import { useRequireLogin } from "../context/LoginGate";
 import { buttonShadow, cardShadow, colors } from "../theme";
 import { deviceType } from "../lib/supabase";
@@ -58,6 +58,17 @@ const categories = [
   { label: "Shop", query: "category=shop", bg: "#F1EAE2", color: "#6F6A64", icon: "storefront-outline" as const },
 ];
 
+function LocationPrompt({ denied, canAskAgain, onAllow }: { denied: boolean; canAskAgain: boolean; onAllow: () => void }) {
+  if (!denied) return null;
+  return (
+    <Pressable onPress={onAllow} style={{ marginTop: 12, borderRadius: 14, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <Ionicons name="location-outline" size={20} color={colors.primaryDark} />
+      <Text style={{ flex: 1, color: colors.ink, fontSize: 13, lineHeight: 18 }}>Please allow location to see properties near you.</Text>
+      <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 13 }}>{canAskAgain ? "Allow" : "Settings"}</Text>
+    </Pressable>
+  );
+}
+
 function shuffleList<T>(list: T[]) {
   const copy = [...list];
   for (let index = copy.length - 1; index > 0; index -= 1) {
@@ -89,27 +100,7 @@ export function HomeScreen({
   const cardWidth = (Dimensions.get("window").width - 20 * 2 - 12) / 2;
 
   const profileCity = cityName(me?.profile?.city);
-  const [placeCity, setPlaceCity] = useState("");
-  const [located, setLocated] = useState(false);
-  const city = placeCity;
-
-  useEffect(() => {
-    let active = true;
-    readCurrentPlace()
-      .then((place) => {
-        if (!active) return;
-        setPlaceCity(cityName(place.city) || profileCity);
-      })
-      .catch(() => {
-        if (active) setPlaceCity(profileCity);
-      })
-      .finally(() => {
-        if (active) setLocated(true);
-      });
-    return () => {
-      active = false;
-    };
-  }, [profileCity]);
+  const { city, ready, denied, canAskAgain, retry } = useBrowseCity(profileCity);
 
   const loadTier = useCallback((tier: "premium" | "standard", offset: number) => {
     const params = new URLSearchParams({
@@ -123,17 +114,17 @@ export function HomeScreen({
 
   const premiumPage = usePagedProperties(
     (offset) => loadTier("premium", offset),
-    `${located}|${city}|${token || ""}|premium`,
-    located,
+    `${city}|${token || ""}|premium`,
+    true,
     (rows, mode) => (mode === "more" ? rows : shuffleList(rows)),
   );
   const simplePage = usePagedProperties(
     (offset) => loadTier("standard", offset),
-    `${located}|${city}|${token || ""}|standard`,
-    located,
+    `${city}|${token || ""}|standard`,
+    true,
     (rows, mode) => (mode === "more" ? rows : shuffleList(rows)),
   );
-  const loading = located && (premiumPage.loading || simplePage.loading) && premiumPage.items.length === 0 && simplePage.items.length === 0;
+  const loading = (premiumPage.loading || simplePage.loading) && premiumPage.items.length === 0 && simplePage.items.length === 0;
   const refreshing = premiumPage.refreshing || simplePage.refreshing;
   const error = premiumPage.error || simplePage.error;
 
@@ -192,7 +183,7 @@ export function HomeScreen({
           <Image source={require("../../assets/splash.png")} style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: colors.line }} resizeMode="cover" />
         </Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>{city || "Finding city"}</Text>
+          <Text numberOfLines={1} style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>{city || (ready ? "All properties" : "Finding city")}</Text>
           <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 13, color: colors.muted }}>Find your property</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -213,6 +204,7 @@ export function HomeScreen({
         <Ionicons name="search" size={18} color={colors.primary} />
         <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => onSearch(query || "all")} placeholder="Search house, plot, land..." placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
       </View>
+      <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
     </View>
     <ScrollView
       style={{ flex: 1 }}
@@ -283,8 +275,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   const { isSaved, toggle } = useFavorites();
   const requireLogin = useRequireLogin();
   const profileCity = cityName(me?.profile?.city);
-  const [nearCity, setNearCity] = useState("");
-  const [located, setLocated] = useState(false);
+  const { city: nearCity, denied, canAskAgain, retry } = useBrowseCity(profileCity);
   const [q, setQ] = useState("");
   const [listing, setListing] = useState("");
   const [category, setCategory] = useState("");
@@ -316,8 +307,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
 
   const searchPage = usePagedProperties(
     loadSearchPage,
-    `${located}|${q}|${listing}|${category}|${propertyType}|${price}|${bedrooms}|${nearCity}|${token || ""}`,
-    located,
+    `${q}|${listing}|${category}|${propertyType}|${price}|${bedrooms}|${nearCity}|${token || ""}`,
   );
   const { items, loading, refreshing } = searchPage;
 
@@ -336,24 +326,6 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
       setQ(initialQuery);
     }
   }, [initialQuery]);
-
-  useEffect(() => {
-    let active = true;
-    readCurrentPlace()
-      .then((place) => {
-        if (!active) return;
-        setNearCity(cityName(place.city) || profileCity);
-      })
-      .catch(() => {
-        if (active) setNearCity(profileCity);
-      })
-      .finally(() => {
-        if (active) setLocated(true);
-      });
-    return () => {
-      active = false;
-    };
-  }, [profileCity]);
 
   const shown = sortForSearch(
     [...items]
@@ -424,6 +396,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
             {filterCount ? <View style={{ position: "absolute", top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}><Text style={{ color: colors.white, fontSize: 10, fontWeight: "800" }}>{filterCount}</Text></View> : null}
           </Pressable>
         </View>
+        <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
       </View>
       {!loading ? <Text style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, color: colors.muted, fontSize: 13 }}>{shown.length} {shown.length === 1 ? "result" : "results"}{q.trim() ? ` • ${q.trim()}` : ""}</Text> : null}
       <FlatList
