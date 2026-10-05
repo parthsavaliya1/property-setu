@@ -270,7 +270,7 @@ export function HomeScreen({
         <Pressable onPress={() => onSearch("all")}><Text style={{ color: colors.primary, fontWeight: "700" }}>See All</Text></Pressable>
       </View>
       ) : null}
-      {!loading && simpleItems.length === 0 && premiumItems.length === 0 ? <EmptyState kind="active" /> : null}
+      {!loading && !error && simpleItems.length === 0 && premiumItems.length === 0 ? <EmptyState kind="active" /> : null}
       {!loading && simpleItems.length > 0 ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 20, gap: 12 }}>
           {simpleItems.map((item) => propertyCard(item, cardWidth))}
@@ -322,7 +322,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     loadSearchPage,
     `${q}|${listing}|${category}|${propertyType}|${price}|${bedrooms}|${nearCity}|${token || ""}`,
   );
-  const { items, loading, refreshing } = searchPage;
+  const { items, loading, refreshing, error } = searchPage;
 
   useEffect(() => {
     if (!initialQuery || initialQuery === "all") return;
@@ -411,7 +411,8 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
         </View>
         <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
       </View>
-      {!loading ? <Text style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, color: colors.muted, fontSize: 13 }}>{shown.length} {shown.length === 1 ? "result" : "results"}{q.trim() ? ` • ${q.trim()}` : ""}</Text> : null}
+      {error ? <Text style={[styles.error, { marginHorizontal: 20, marginTop: 12 }]}>{error}</Text> : null}
+      {!loading && !error ? <Text style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, color: colors.muted, fontSize: 13 }}>{shown.length} {shown.length === 1 ? "result" : "results"}{q.trim() ? ` • ${q.trim()}` : ""}</Text> : null}
       <FlatList
         style={{ flex: 1 }}
         data={loading ? [] : shown}
@@ -430,7 +431,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
             onSave={() => toggleSaved(item)}
           />
         )}
-        ListEmptyComponent={loading ? <PropertyListSkeleton /> : <EmptyState kind="search" />}
+        ListEmptyComponent={loading ? <PropertyListSkeleton /> : error ? null : <EmptyState kind="search" />}
       />
       <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" }}>
@@ -707,12 +708,17 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
   const { width } = useWindowDimensions();
 
   useEffect(() => {
+    if (!id) {
+      setItem(null);
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
     setPhotoIndex(0);
     setZoomOpen(false);
     api.property(id, token).then((row) => {
-      if (active) setItem(row);
+      if (active) setItem(row && typeof row === "object" && !Array.isArray(row) ? row : null);
     }).catch((err) => {
       if (active) setNote(err.message);
     }).finally(() => {

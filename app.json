@@ -18,6 +18,7 @@
     },
     "android": {
       "package": "com.propertyhub.app",
+      "usesCleartextTraffic": true,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",

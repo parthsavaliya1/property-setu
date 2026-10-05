@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "./AuthContext";
 import { PROPERTY_PAGE_SIZE, api, appendProperties } from "../lib/api";
+import { getRemoteSettings, subscribeRemoteSettings } from "../lib/remoteConfig";
 import type { PropertyCard } from "../types/database";
 
 type FavoritesValue = {
@@ -25,6 +26,9 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const [hasMore, setHasMore] = useState(true);
   const changes = useRef(0);
   const paging = useRef({ offset: 0, hasMore: true, busy: false, gen: 0 });
+  const [apiUrl, setApiUrl] = useState(() => getRemoteSettings().apiUrl || "");
+
+  useEffect(() => subscribeRemoteSettings(() => setApiUrl(getRemoteSettings().apiUrl || "")), []);
 
   const applyPage = useCallback((rows: PropertyCard[], replace: boolean) => {
     setItems((current) => (replace ? rows : appendProperties(current, rows)));
@@ -52,6 +56,13 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       const rows = await api.favorites(token, `?limit=${PROPERTY_PAGE_SIZE}&offset=${start}`);
       if (gen !== paging.current.gen || stamp !== changes.current) return;
       applyPage(rows, replace);
+    } catch {
+      if (gen !== paging.current.gen || stamp !== changes.current) return;
+      if (replace) {
+        setItems([]);
+        setSaved({});
+        setHasMore(false);
+      }
     } finally {
       if (gen === paging.current.gen) {
         paging.current.busy = false;
@@ -87,7 +98,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [applyPage, token]);
+  }, [apiUrl, applyPage, token]);
 
   const isSaved = useCallback((id: string, fallback?: boolean) => {
     if (id in saved) return saved[id];

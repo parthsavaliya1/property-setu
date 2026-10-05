@@ -360,7 +360,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
       const fee = listingPrice(badge, "month");
       const wallet = await api.wallet(token);
       if (wallet.balance < fee) {
-        const order = await api.walletOrder(fee - wallet.balance, token);
+        const order = await api.walletOrder(Math.max(1, Math.ceil(fee - wallet.balance)), token);
         const paid = await pay({
           keyId: order.key_id,
           orderId: order.order_id,
@@ -640,10 +640,11 @@ export function VisitsScreen({ onOpen }: { onOpen: (id: string) => void }) {
             </Pressable>
             {canConfirm ? (
               <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
-                <Button title="Confirm visit" onPress={async () => {
+                <Button title="Confirm visit" onPress={() => {
                   if (!token) return;
-                  await api.updateVisit(item.id, { status: "confirmed" }, token);
-                  setItems((current) => current.map((row) => row.id === item.id ? { ...row, status: "confirmed" } : row));
+                  api.updateVisit(item.id, { status: "confirmed" }, token).then(() => {
+                    setItems((current) => current.map((row) => row.id === item.id ? { ...row, status: "confirmed" } : row));
+                  }).catch(() => undefined);
                 }} />
               </View>
             ) : null}
@@ -911,8 +912,12 @@ export function NotificationsScreen({ onOpen }: { onOpen: (item: NotificationIte
 
   async function markAll() {
     if (!token || !unread) return;
-    await api.readNotifications(token);
-    setItems((current) => current.map((item) => ({ ...item, is_read: true })));
+    try {
+      await api.readNotifications(token);
+      setItems((current) => current.map((item) => ({ ...item, is_read: true })));
+    } catch {
+      /* the list stays as it is if the server cannot be reached */
+    }
   }
 
   const tabs = [
@@ -958,13 +963,16 @@ export function NotificationsScreen({ onOpen }: { onOpen: (item: NotificationIte
         return (
           <View key={item.id}>
             {label !== previous ? <Text style={{ marginTop: 8, marginBottom: 6, marginHorizontal: 20, fontSize: 13, fontWeight: "800", color: colors.muted }}>{label}</Text> : null}
-            <Pressable onPress={async () => {
+            <Pressable onPress={() => {
               if (!token) return;
-              if (!item.is_read) {
-                await api.readNotification(item.id, token);
-                setItems((current) => current.map((row) => row.id === item.id ? { ...row, is_read: true } : row));
+              const open = () => onOpen(item);
+              if (item.is_read) {
+                open();
+                return;
               }
-              onOpen(item);
+              api.readNotification(item.id, token).then(() => {
+                setItems((current) => current.map((row) => row.id === item.id ? { ...row, is_read: true } : row));
+              }).catch(() => undefined).finally(open);
             }} style={{ marginHorizontal: 16, marginBottom: 8, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, overflow: "hidden" }}>
               {!item.is_read ? <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, backgroundColor: colors.primary }} /> : null}
               <View style={{ flexDirection: "row", alignItems: "flex-start", padding: 14, gap: 12 }}>

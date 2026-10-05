@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { PROPERTY_PAGE_SIZE, appendProperties } from "./api";
+import { getRemoteSettings, subscribeRemoteSettings } from "./remoteConfig";
 import type { PropertyCard } from "../types/database";
 
 export function nearScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>, axis: "x" | "y" = "y") {
@@ -27,8 +28,11 @@ export function usePagedProperties(
   const flight = useRef(false);
   const loadPageRef = useRef(loadPage);
   const arrangeRef = useRef(arrange);
+  const [apiUrl, setApiUrl] = useState(() => getRemoteSettings().apiUrl || "");
   loadPageRef.current = loadPage;
   arrangeRef.current = arrange;
+
+  useEffect(() => subscribeRemoteSettings(() => setApiUrl(getRemoteSettings().apiUrl || "")), []);
 
   const run = useCallback(async (mode: "load" | "refresh" | "more") => {
     const state = paging.current;
@@ -52,7 +56,9 @@ export function usePagedProperties(
     else if (mode === "refresh") setRefreshing(true);
     else setLoadingMore(true);
     try {
-      const rows = arrangeRef.current ? arrangeRef.current(await loadPageRef.current(offset), mode) : await loadPageRef.current(offset);
+      const loaded = await loadPageRef.current(offset);
+      const page = Array.isArray(loaded) ? loaded : [];
+      const rows = arrangeRef.current ? arrangeRef.current(page, mode) : page;
       if (gen !== paging.current.gen) return;
       setItems((current) => (mode === "more" ? appendProperties(current, rows) : rows));
       paging.current.offset = offset + rows.length;
@@ -79,7 +85,7 @@ export function usePagedProperties(
 
   useEffect(() => {
     void run("load");
-  }, [run, signature]);
+  }, [apiUrl, run, signature]);
 
   const refresh = useCallback(() => run("refresh"), [run]);
   const loadMore = useCallback(() => run("more"), [run]);

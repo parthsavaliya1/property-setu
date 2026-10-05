@@ -375,7 +375,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         const fee = amountDue(listingStatus, expiresAt, badge, term, savedBadge, savedTerm);
         let balance = walletBalance ?? 0;
         if (balance < fee) {
-          const order = await api.walletOrder(fee - balance, auth.token);
+          const order = await api.walletOrder(Math.max(1, Math.ceil(fee - balance)), auth.token);
           const paid = await pay({
             keyId: order.key_id,
             orderId: order.order_id,

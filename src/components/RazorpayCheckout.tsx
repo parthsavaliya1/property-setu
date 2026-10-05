@@ -1,5 +1,5 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
-import { Modal, Platform, Pressable, Text, View } from "react-native";
+import { Linking, Modal, Platform, Pressable, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { colors } from "../theme";
 
@@ -99,6 +99,30 @@ function openWebCheckout(order: RazorpayOrder) {
   });
 }
 
+function openExternalPayment(url: string) {
+  try {
+    const scheme = url.match(/scheme=([^;]+)/i)?.[1];
+    const fallback = url.match(/browser_fallback_url=([^;]+)/i)?.[1];
+    const target = url.startsWith("intent:")
+      ? `${decodeURIComponent(scheme || "upi")}://${url.replace(/^intent:\/\//, "").split("#")[0]}`
+      : url;
+    Linking.openURL(target).catch(() => {
+      if (!fallback) return;
+      try {
+        Linking.openURL(decodeURIComponent(fallback)).catch(() => undefined);
+      } catch {
+        /* the checkout stays open if the UPI app cannot be launched */
+      }
+    });
+  } catch {
+    Linking.openURL(url).catch(() => undefined);
+  }
+}
+
+function isExternalPayment(url: string) {
+  return /^(upi|intent|tez|phonepe|paytmmp|gpay|credpay|bhim):/i.test(url);
+}
+
 export function useRazorpay() {
   const checkout = useContext(CheckoutContext);
   if (!checkout) throw new Error("Payment is not ready");
@@ -141,6 +165,18 @@ export function RazorpayHost({ children }: { children: ReactNode }) {
             <WebView
               originWhitelist={["*"]}
               source={{ html: checkoutHtml(order), baseUrl: "https://checkout.razorpay.com" }}
+              javaScriptEnabled
+              domStorageEnabled
+              thirdPartyCookiesEnabled
+              sharedCookiesEnabled
+              setSupportMultipleWindows={false}
+              onShouldStartLoadWithRequest={(request) => {
+                if (isExternalPayment(request.url)) {
+                  openExternalPayment(request.url);
+                  return false;
+                }
+                return true;
+              }}
               onMessage={(event) => {
                 try {
                   const payload = JSON.parse(event.nativeEvent.data) as RazorpaySuccess & { cancelled?: boolean; failed?: boolean; description?: string };
@@ -151,7 +187,6 @@ export function RazorpayHost({ children }: { children: ReactNode }) {
                   finish(new Error("Payment could not be read"));
                 }
               }}
-              javaScriptEnabled
             />
           ) : null}
         </View>

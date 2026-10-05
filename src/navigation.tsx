@@ -8,6 +8,7 @@ import { RequireLoginContext, useRequireLogin } from "./context/LoginGate";
 import { RazorpayHost } from "./components/RazorpayCheckout";
 import { buttonShadow, colors } from "./theme";
 import { useAuth } from "./context/AuthContext";
+import { getRemoteSettings } from "./lib/remoteConfig";
 import { EditProfileScreen, FavoritesScreen, InquiriesScreen, MenuScreen, MyPropertiesScreen, NotificationsScreen, PaymentHistoryScreen, ProfileScreen, VisitsScreen, WalletScreen } from "./screens/AccountScreens";
 import { AboutScreen } from "./screens/AboutScreen";
 import { ChatScreen, ChatsScreen } from "./screens/ChatScreens";
@@ -137,7 +138,7 @@ function Tabs() {
       screenOptions={({ route }) => ({
         headerShown: false,
         unmountOnBlur: false,
-        freezeOnBlur: true,
+        freezeOnBlur: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.faint,
         tabBarStyle: { height: 68, paddingTop: 6, paddingBottom: 8, borderTopColor: colors.line, backgroundColor: colors.page, overflow: "visible" },
@@ -241,10 +242,11 @@ export function RootNavigation() {
     );
   }
 
+  const apiUrl = getRemoteSettings().apiUrl || "";
   return (
     <RazorpayHost>
     <RequireLoginContext.Provider value={setLoginMessage}>
-      <NavigationContainer ref={navigationRef}>
+      <NavigationContainer key={apiUrl || "local"} ref={navigationRef}>
         <Stack.Navigator
           initialRouteName={start}
           screenOptions={{
@@ -257,9 +259,9 @@ export function RootNavigation() {
           <Stack.Screen name="Login">{() => <LoginScreen onBrowse={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} />}</Stack.Screen>
           <Stack.Screen name="Main" component={Tabs} />
           <Stack.Screen name="Map">{() => <MapScreen onOpen={openDetails} showBack />}</Stack.Screen>
-          <Stack.Screen name="Details">{({ route }) => <DetailsScreen id={route.params.id} onSchedule={(id) => navigationRef.navigate("Schedule", { id })} onChat={(id) => navigationRef.navigate("Chat", { propertyId: id })} />}</Stack.Screen>
+          <Stack.Screen name="Details">{({ route }) => <DetailsScreen id={route.params?.id || ""} onSchedule={(id) => navigationRef.navigate("Schedule", { id })} onChat={(id) => navigationRef.navigate("Chat", { propertyId: id })} />}</Stack.Screen>
           <Stack.Screen name="Add">{({ route }) => session ? <AddScreen propertyId={route.params?.id} onDone={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} /> : <LoginScreen onBrowse={() => navigationRef.navigate("Main")} />}</Stack.Screen>
-          <Stack.Screen name="Schedule">{({ route }) => <ScheduleScreen id={route.params.id} onDone={() => navigationRef.navigate("Visits")} />}</Stack.Screen>
+          <Stack.Screen name="Schedule">{({ route }) => <ScheduleScreen id={route.params?.id || ""} onDone={() => navigationRef.navigate("Visits")} />}</Stack.Screen>
           <Stack.Screen name="MyProperties">{() => <MyPropertiesScreen onOpen={openDetails} onEdit={(id) => navigationRef.navigate("Add", { id })} />}</Stack.Screen>
           <Stack.Screen name="Inquiries">{() => <InquiriesScreen onChat={(propertyId, buyerId) => navigationRef.navigate("Chat", { propertyId, buyerId: buyerId || undefined })} />}</Stack.Screen>
           <Stack.Screen name="Visits">{() => <VisitsScreen onOpen={openDetails} />}</Stack.Screen>

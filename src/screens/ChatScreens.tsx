@@ -239,7 +239,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
 
   useEffect(() => {
     if (!token || !threadId) return;
-    const socket: Socket = io(apiBase(), { auth: { token } });
+    const socket: Socket = io(apiBase(), { path: "/api/socket.io", auth: { token }, transports: ["websocket", "polling"] });
     const join = () => socket.emit("join", threadId);
     socket.on("connect", join);
     socket.on("message", (message: ChatMessage) => {

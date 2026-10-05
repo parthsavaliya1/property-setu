@@ -54,6 +54,11 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   return body as T;
 }
 
+async function requestList<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T[]> {
+  const body = await request<unknown>(path, options, token);
+  return Array.isArray(body) ? body as T[] : [];
+}
+
 export function cityName(city?: string | null) {
   const value = (city || "").trim();
   const key = value.toLowerCase();
@@ -182,9 +187,9 @@ export const api = {
     request<{ token: string; user: AuthUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   google: (proof: { code: string; code_verifier: string; redirect_uri: string; client_id: string }) =>
     request<{ token: string; user: AuthUser }>("/auth/google", { method: "POST", body: JSON.stringify(proof) }),
-  categories: () => request<Category[]>("/categories"),
-  amenities: () => request<Array<{ id: string; name: string }>>("/amenities"),
-  properties: (query = "", token?: string | null) => request<PropertyCard[]>(`/properties${query}`, {}, token),
+  categories: () => requestList<Category>("/categories"),
+  amenities: () => requestList<{ id: string; name: string }>("/amenities"),
+  properties: (query = "", token?: string | null) => requestList<PropertyCard>(`/properties${query}`, {}, token),
   property: (id: string, token?: string | null) => request<PropertyDetail>(`/properties/${id}`, {}, token),
   createProperty: (payload: unknown, token: string) =>
     request<PropertyDetail>("/properties", { method: "POST", body: JSON.stringify(payload) }, token),
@@ -197,15 +202,15 @@ export const api = {
     request(`/properties/${id}/view`, { method: "POST", body: JSON.stringify({ device_type: deviceType }) }, token),
   favorite: (id: string, token: string) => request(`/properties/${id}/favorite`, { method: "POST" }, token),
   unfavorite: (id: string, token: string) => request(`/properties/${id}/favorite`, { method: "DELETE" }, token),
-  favorites: (token: string, query = "") => request<PropertyCard[]>(`/favorites${query}`, {}, token),
+  favorites: (token: string, query = "") => requestList<PropertyCard>(`/favorites${query}`, {}, token),
   inquire: (id: string, payload: unknown, token: string) =>
     request(`/properties/${id}/inquiries`, { method: "POST", body: JSON.stringify(payload) }, token),
-  inquiries: (token: string) => request<Inquiry[]>("/inquiries", {}, token),
+  inquiries: (token: string) => requestList<Inquiry>("/inquiries", {}, token),
   updateInquiry: (id: string, status: string, token: string) =>
     request(`/inquiries/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }, token),
   visit: (id: string, payload: unknown, token: string) =>
     request(`/properties/${id}/visits`, { method: "POST", body: JSON.stringify(payload) }, token),
-  visits: (token: string) => request<Visit[]>("/visits", {}, token),
+  visits: (token: string) => requestList<Visit>("/visits", {}, token),
   updateVisit: (id: string, payload: unknown, token: string) =>
     request(`/visits/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, token),
   report: (id: string, payload: unknown, token: string) =>
@@ -213,14 +218,14 @@ export const api = {
   me: (token: string) => request<Me>("/me", {}, token),
   updateMe: (payload: unknown, token: string) => request("/me", { method: "PATCH", body: JSON.stringify(payload) }, token),
   deleteMe: (token: string) => request<void>("/me", { method: "DELETE" }, token),
-  notifications: (token: string) => request<NotificationItem[]>("/notifications", {}, token),
+  notifications: (token: string) => requestList<NotificationItem>("/notifications", {}, token),
   readNotification: (id: string, token: string) => request(`/notifications/${id}/read`, { method: "PATCH" }, token),
   readNotifications: (token: string) => request<void>("/notifications/read", { method: "PATCH" }, token),
-  chats: (token: string) => request<ChatThread[]>("/chats", {}, token),
+  chats: (token: string) => requestList<ChatThread>("/chats", {}, token),
   chat: (id: string, token: string) => request<ChatThread>(`/chats/${id}`, {}, token),
   openChat: (propertyId: string, token: string, buyerId?: string) =>
     request<ChatThread>(`/properties/${propertyId}/chat`, { method: "POST", body: JSON.stringify(buyerId ? { buyer_id: buyerId } : {}) }, token),
-  messages: (id: string, token: string) => request<ChatMessage[]>(`/chats/${id}/messages`, {}, token),
+  messages: (id: string, token: string) => requestList<ChatMessage>(`/chats/${id}/messages`, {}, token),
   sendMessage: (
     id: string,
     payload: { body?: string; attachment_url?: string; attachment_name?: string; attachment_kind?: "image" | "document"; reply_to_id?: string },
@@ -245,7 +250,7 @@ export const api = {
     token: string
   ) => request<{ ok: boolean; expires_at?: string }>("/payments/verify", { method: "POST", body: JSON.stringify(payload) }, token),
   wallet: (token: string) => request<{ balance: number }>("/wallet", {}, token),
-  walletHistory: (token: string) => request<WalletTransaction[]>("/wallet/transactions", {}, token),
+  walletHistory: (token: string) => requestList<WalletTransaction>("/wallet/transactions", {}, token),
   walletOrder: (amount: number, token: string) =>
     request<{ key_id: string; order_id: string; amount: number; currency: string; description: string }>(
       "/wallet/order",

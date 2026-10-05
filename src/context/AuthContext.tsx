@@ -1,9 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { api, type AuthUser } from "../lib/api";
 import { startGoogleSignIn } from "../lib/google";
-import { loadRemoteConfig } from "../lib/remoteConfig";
+import { loadRemoteConfig, subscribeRemoteSettings } from "../lib/remoteConfig";
 import type { Me } from "../types/database";
 
 const SESSION_KEY = "propertyhub.session";
@@ -33,12 +33,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<AppSession | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   useEffect(() => {
     let active = true;
     Promise.race([
       loadRemoteConfig(),
-      new Promise((resolve) => setTimeout(resolve, 3000)),
+      new Promise((resolve) => setTimeout(resolve, 8000)),
     ])
       .catch(() => undefined)
       .then(() => AsyncStorage.getItem(SESSION_KEY))
@@ -59,9 +61,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") loadRemoteConfig().catch(() => undefined);
     });
+    const settings = subscribeRemoteSettings(() => {
+      const token = sessionRef.current?.access_token;
+      if (!token) return;
+      api.me(token).then((next) => {
+        if (sessionRef.current?.access_token === token) setMe(next);
+      }).catch(() => {
+        if (sessionRef.current?.access_token === token) setMe(null);
+      });
+    });
     return () => {
       active = false;
       subscription.remove();
+      settings();
     };
   }, []);
 
