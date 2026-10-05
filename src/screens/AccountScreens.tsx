@@ -49,7 +49,9 @@ export function MenuScreen({
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line }}>
-        <Image source={require("../../assets/splash.png")} style={{ width: 40, height: 40, borderRadius: 10 }} resizeMode="cover" />
+        <View style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+          <Image source={require("../../assets/splash.png")} style={{ width: 32, height: 32 }} resizeMode="contain" />
+        </View>
         <Text style={{ flex: 1, marginLeft: 10, fontSize: 18, fontWeight: "800", color: colors.ink }}>PropertySetu</Text>
         <Pressable onPress={onClose} hitSlop={12} style={{ width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.page }}>
           <Ionicons name="close" size={22} color={colors.ink} />

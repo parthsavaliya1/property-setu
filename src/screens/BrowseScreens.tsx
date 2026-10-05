@@ -180,7 +180,9 @@ export function HomeScreen({
     <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 8, backgroundColor: page }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
         <Pressable onPress={onOpenMenu} hitSlop={8}>
-          <Image source={require("../../assets/splash.png")} style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: colors.line }} resizeMode="cover" />
+          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            <Image source={require("../../assets/splash.png")} style={{ width: 32, height: 32 }} resizeMode="contain" />
+          </View>
         </Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>{city || (ready ? "All properties" : "Finding city")}</Text>

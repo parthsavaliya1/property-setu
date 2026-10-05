@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Animated, Modal, Pressable, Text, View } from "react-native";
 import { RequireLoginContext, useRequireLogin } from "./context/LoginGate";
 import { RazorpayHost } from "./components/RazorpayCheckout";
 import { buttonShadow, colors } from "./theme";
@@ -42,6 +42,63 @@ const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 function openDetails(id: string) {
   if (navigationRef.isReady()) navigationRef.navigate("Details", { id });
+}
+
+function SellTabButton() {
+  const { session } = useAuth();
+  const requireLogin = useRequireLogin();
+  const ringA = useRef(new Animated.Value(0)).current;
+  const ringB = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulse = (value: Animated.Value) =>
+      Animated.loop(Animated.timing(value, { toValue: 1, duration: 1600, useNativeDriver: true }));
+    const first = pulse(ringA);
+    const second = pulse(ringB);
+    first.start();
+    const timer = setTimeout(() => second.start(), 800);
+    return () => {
+      clearTimeout(timer);
+      first.stop();
+      second.stop();
+    };
+  }, [ringA, ringB]);
+
+  function ringStyle(value: Animated.Value) {
+    return {
+      position: "absolute" as const,
+      width: 54,
+      height: 54,
+      left: 21,
+      top: 21,
+      borderRadius: 27,
+      backgroundColor: colors.primaryLight,
+      opacity: value.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0.55, 0.28, 0] }),
+      transform: [{ scale: value.interpolate({ inputRange: [0, 1], outputRange: [1, 1.75] }) }],
+    };
+  }
+
+  return (
+    <Pressable
+      onPress={() => {
+        if (!session) {
+          requireLogin("Sign in to add a property.");
+          return;
+        }
+        navigationRef.navigate("Add");
+      }}
+      style={{ alignItems: "center", width: 72, overflow: "visible" }}
+    >
+      <View style={{ width: 96, height: 96, marginTop: -43, alignItems: "center", justifyContent: "center" }}>
+        <Animated.View pointerEvents="none" style={ringStyle(ringA)} />
+        <Animated.View pointerEvents="none" style={ringStyle(ringB)} />
+        <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", ...buttonShadow }}>
+          <Text style={{ color: colors.white, fontSize: 30, fontWeight: "500", marginTop: -2 }}>+</Text>
+        </View>
+      </View>
+      <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700", marginTop: -19 }}>Sell</Text>
+    </Pressable>
+  );
 }
 
 function Tabs() {
@@ -83,7 +140,7 @@ function Tabs() {
         freezeOnBlur: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.faint,
-        tabBarStyle: { height: 68, paddingTop: 6, paddingBottom: 8, borderTopColor: colors.line, backgroundColor: colors.page },
+        tabBarStyle: { height: 68, paddingTop: 6, paddingBottom: 8, borderTopColor: colors.line, backgroundColor: colors.page, overflow: "visible" },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
         tabBarIcon: ({ color, size }) => {
           const icons: Record<string, keyof typeof Ionicons.glyphMap> = { Home: "home", Search: "search", Saved: "heart-outline", Profile: "person-outline" };
@@ -113,23 +170,7 @@ function Tabs() {
         name="Map"
         options={{
           tabBarLabel: () => null,
-          tabBarButton: () => (
-            <Pressable
-              onPress={() => {
-                if (!session) {
-                  requireLogin("Sign in to add a property.");
-                  return;
-                }
-                navigationRef.navigate("Add");
-              }}
-              style={{ alignItems: "center", width: 72 }}
-            >
-              <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: -22, ...buttonShadow }}>
-                <Text style={{ color: colors.white, fontSize: 30, fontWeight: "500", marginTop: -2 }}>+</Text>
-              </View>
-              <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700", marginTop: 2 }}>Sell</Text>
-            </Pressable>
-          ),
+          tabBarButton: () => <SellTabButton />,
         }}
       >
         {() => <MapScreen onOpen={openDetails} />}
