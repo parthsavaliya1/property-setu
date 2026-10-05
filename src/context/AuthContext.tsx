@@ -2,8 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { api, type AuthUser } from "../lib/api";
+import { startGoogleSignIn } from "../lib/google";
 import { loadRemoteConfig } from "../lib/remoteConfig";
-import { getSupabase, startOAuth } from "../lib/supabase";
 import type { Me } from "../types/database";
 
 const SESSION_KEY = "propertyhub.session";
@@ -20,8 +20,8 @@ type AuthValue = {
   me: Me | null;
   token: string | null;
   refreshMe: () => Promise<void>;
-  signInEmail: (email: string, password: string) => Promise<void>;
-  signUpEmail: (name: string, email: string, password: string) => Promise<string | null>;
+  sendOtp: (phone: string, create: boolean) => Promise<string>;
+  verifyOtp: (phone: string, otp: string, sessionId: string, create: boolean, fullName?: string) => Promise<void>;
   signInGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -89,24 +89,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     me,
     token: session?.access_token ?? null,
     refreshMe,
-    signInEmail: async (email, password) => {
-      const result = await api.login(email, password);
-      await store({ access_token: result.token, user: result.user });
+    sendOtp: async (phone, create) => {
+      const result = await api.sendOtp(phone, create);
+      return result.sessionId;
     },
-    signUpEmail: async (name, email, password) => {
-      const result = await api.signup(email, password, name);
+    verifyOtp: async (phone, otp, sessionId, create, fullName) => {
+      const result = await api.verifyOtp(phone, otp, sessionId, create, fullName);
       await store({ access_token: result.token, user: result.user });
-      return null;
     },
     signInGoogle: async () => {
-      const accessToken = await startOAuth("google");
-      try {
-        const result = await api.google(accessToken);
-        await store({ access_token: result.token, user: result.user });
-      } finally {
-        const supabase = await getSupabase();
-        if (supabase) await supabase.auth.signOut();
-      }
+      const proof = await startGoogleSignIn();
+      const result = await api.google(proof);
+      await store({ access_token: result.token, user: result.user });
     },
     signOut: async () => {
       await AsyncStorage.removeItem(SESSION_KEY);

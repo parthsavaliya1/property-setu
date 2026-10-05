@@ -118,7 +118,7 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
         amount: order.amount,
         currency: order.currency,
         description: order.description,
-        email: session?.user.email,
+        email: session?.user.email || undefined,
       });
       const result = await api.walletVerify({
         razorpay_order_id: paid.razorpay_order_id,
@@ -365,7 +365,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
           amount: order.amount,
           currency: order.currency,
           description: order.description,
-          email: session?.user.email,
+          email: session?.user.email || undefined,
         });
         await api.walletVerify({
           razorpay_order_id: paid.razorpay_order_id,
@@ -735,7 +735,7 @@ export function ProfileScreen({
           </View>
           <View style={{ flex: 1, minWidth: 0, paddingRight: session ? 28 : 0 }}>
             <Text numberOfLines={1} style={{ fontSize: 20, fontWeight: "800", color: colors.ink }}>{me?.profile?.full_name || "Guest"}</Text>
-            <Text numberOfLines={1} style={{ marginTop: 4, color: colors.muted }}>{session ? me?.profile?.city || session.user.email : "Sign in to see your account"}</Text>
+            <Text numberOfLines={1} style={{ marginTop: 4, color: colors.muted }}>{session ? me?.profile?.city || (me?.profile?.phone ? `+91 ${me.profile.phone}` : "Your account") : "Sign in to see your account"}</Text>
           </View>
           {session ? (
             <Pressable onPress={onEditProfile} hitSlop={8} style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, alignItems: "center", justifyContent: "center" }}>

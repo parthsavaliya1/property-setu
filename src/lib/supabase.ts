@@ -1,11 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import * as Linking from "expo-linking";
-import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 import "react-native-url-polyfill/auto";
-
-WebBrowser.maybeCompleteAuthSession();
 
 const KEY = "propertyhub.anonKey";
 
@@ -47,37 +43,6 @@ export async function saveAnonKey(key: string) {
   await AsyncStorage.setItem(KEY, key.trim());
   client = null;
   clientKey = "";
-}
-
-export function authRedirectUrl() {
-  return Linking.createURL("auth/callback");
-}
-
-export async function startOAuth(provider: "google" | "apple") {
-  const supabase = await getSupabase();
-  if (!supabase) throw new Error("Paste the Supabase anon key first.");
-  const redirectTo = authRedirectUrl();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: { redirectTo, skipBrowserRedirect: true },
-  });
-  if (error) throw error;
-  if (!data.url) throw new Error("Google sign-in did not return a URL.");
-
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-  if (result.type !== "success") throw new Error("Sign-in was cancelled.");
-
-  const parsed = Linking.parse(result.url);
-  const code = parsed.queryParams?.code;
-  const oauthError = parsed.queryParams?.error_description || parsed.queryParams?.error;
-  if (typeof oauthError === "string") throw new Error(oauthError);
-  if (typeof code !== "string") throw new Error("Google did not return a login code. Check the redirect URL in Supabase.");
-
-  const exchanged = await supabase.auth.exchangeCodeForSession(code);
-  if (exchanged.error) throw exchanged.error;
-  const token = exchanged.data.session?.access_token;
-  if (!token) throw new Error("Google sign-in did not finish.");
-  return token;
 }
 
 export async function uploadPropertyImage(uri: string, userId: string) {

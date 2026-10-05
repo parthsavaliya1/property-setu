@@ -47,7 +47,10 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   }
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error((body as { error?: string }).error || "Request failed");
+  if (!response.ok) {
+    const payload = body as { error?: string; code?: string };
+    throw new ApiError(payload.error || "Request failed", response.status, payload.code);
+  }
   return body as T;
 }
 
@@ -149,15 +152,36 @@ export function upgradeCharge(
   return Math.max(0, nextFee - listingPrice(currentBadge, currentTerm));
 }
 
-export type AuthUser = { id: string; email: string };
+export type AuthUser = { id: string; email?: string | null; phone?: string | null };
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
 
 export const api = {
+  sendOtp: (phone: string, create: boolean) =>
+    request<{ message: string; sessionId: string }>("/auth/send-otp", { method: "POST", body: JSON.stringify({ phone, create }) }),
+  verifyOtp: (phone: string, otp: string, sessionId: string, create: boolean, fullName?: string) =>
+    request<{ token: string; user: AuthUser; isNewUser: boolean }>("/auth/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ phone, otp, sessionId, create, full_name: fullName || undefined }),
+    }),
   signup: (email: string, password: string, fullName: string) =>
-    request<{ token: string; user: AuthUser }>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password, full_name: fullName }) }),
+    request<{ verification_required: boolean; message: string }>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password, full_name: fullName }) }),
+  resendVerification: (email: string) =>
+    request<{ message: string }>("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }),
   login: (email: string, password: string) =>
     request<{ token: string; user: AuthUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
-  google: (accessToken: string) =>
-    request<{ token: string; user: AuthUser }>("/auth/google", { method: "POST", body: JSON.stringify({ access_token: accessToken }) }),
+  google: (proof: { code: string; code_verifier: string; redirect_uri: string; client_id: string }) =>
+    request<{ token: string; user: AuthUser }>("/auth/google", { method: "POST", body: JSON.stringify(proof) }),
   categories: () => request<Category[]>("/categories"),
   amenities: () => request<Array<{ id: string; name: string }>>("/amenities"),
   properties: (query = "", token?: string | null) => request<PropertyCard[]>(`/properties${query}`, {}, token),

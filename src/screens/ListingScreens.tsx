@@ -382,7 +382,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             amount: order.amount,
             currency: order.currency,
             description: order.description,
-            email: auth.session?.user.email,
+            email: auth.session?.user.email || undefined,
           });
           const credited = await api.walletVerify({
             razorpay_order_id: paid.razorpay_order_id,
