@@ -102,7 +102,7 @@ function SellTabButton() {
 }
 
 function Tabs() {
-  const { session } = useAuth();
+  const { session, me } = useAuth();
   const requireLogin = useRequireLogin();
   const [searchQuery, setSearchQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -142,7 +142,17 @@ function Tabs() {
         tabBarInactiveTintColor: colors.faint,
         tabBarStyle: { height: 68, paddingTop: 6, paddingBottom: 8, borderTopColor: colors.line, backgroundColor: colors.page, overflow: "visible" },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
-        tabBarIcon: ({ color, size }) => {
+        tabBarIcon: ({ color, size, focused }) => {
+          if (route.name === "Profile" && session) {
+            const letter = (me?.profile?.full_name || "").trim().charAt(0).toUpperCase();
+            if (letter) {
+              return (
+                <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: focused ? colors.primary : colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: focused ? colors.white : colors.primary, fontSize: 13, fontWeight: "800" }}>{letter}</Text>
+                </View>
+              );
+            }
+          }
           const icons: Record<string, keyof typeof Ionicons.glyphMap> = { Home: "home", Search: "search", Saved: "heart-outline", Profile: "person-outline" };
           const name = icons[route.name];
           return name ? <Ionicons name={name} size={size} color={color} /> : null;
@@ -160,6 +170,7 @@ function Tabs() {
               navigation.navigate("Search");
             }}
             onNotify={() => navigationRef.navigate("Notifications")}
+            onWallet={() => navigationRef.navigate("Wallet")}
             onOpenMenu={openMenu}
           />
           );

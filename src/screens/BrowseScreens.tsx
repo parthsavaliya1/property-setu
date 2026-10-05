@@ -84,11 +84,13 @@ export function HomeScreen({
   onOpen,
   onSearch,
   onNotify,
+  onWallet,
   onOpenMenu,
 }: {
   onOpen: (id: string) => void;
   onSearch: (query: string) => void;
   onNotify?: () => void;
+  onWallet?: () => void;
   onOpenMenu: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -129,6 +131,7 @@ export function HomeScreen({
   const error = premiumPage.error || simplePage.error;
 
   useFocusEffect(useCallback(() => {
+    setQuery("");
     if (!token) {
       setUnread(0);
       return;
@@ -148,6 +151,14 @@ export function HomeScreen({
       return;
     }
     onNotify?.();
+  }
+
+  function openWallet() {
+    if (!token) {
+      requireLogin("Sign in to open your wallet.");
+      return;
+    }
+    onWallet?.();
   }
 
   async function toggleSaved(item: PropertyCard) {
@@ -177,7 +188,7 @@ export function HomeScreen({
 
   return (
     <View style={{ flex: 1, backgroundColor: page }}>
-    <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 8, backgroundColor: page }}>
+    <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 0, backgroundColor: page }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
         <Pressable onPress={onOpenMenu} hitSlop={8}>
           <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
@@ -197,14 +208,14 @@ export function HomeScreen({
               </View>
             ) : null}
           </Pressable>
-          <View style={{ width: 40, height: 40, borderRadius: 20, overflow: "hidden", backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }}>
-            {me?.profile?.avatar_url ? <Image source={{ uri: me.profile.avatar_url }} style={{ width: 40, height: 40 }} /> : <Ionicons name="person" size={18} color={colors.muted} />}
-          </View>
+          <Pressable onPress={openWallet} hitSlop={8} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="wallet-outline" size={22} color={colors.ink} />
+          </Pressable>
         </View>
       </View>
       <View style={{ marginTop: 14, backgroundColor: colors.card, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, height: 52, borderWidth: 1, borderColor: colors.line }}>
         <Ionicons name="search" size={18} color={colors.primary} />
-        <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => onSearch(query || "all")} placeholder="Search house, plot, land..." placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
+        <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => { const next = query; setQuery(""); onSearch(next || "all"); }} placeholder="Search house, plot, land..." placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
       </View>
       <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
     </View>
@@ -218,7 +229,7 @@ export function HomeScreen({
       onScroll={(event) => { if (nearScrollEnd(event)) simplePage.loadMore(); }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { premiumPage.refresh(); simplePage.refresh(); }} tintColor={colors.primary} colors={[colors.primary]} />}
     >
-      <View style={{ marginHorizontal: 20, marginTop: 24, backgroundColor: colors.card, borderRadius: 20, paddingTop: 16, paddingBottom: 4, borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
+      <View style={{ marginHorizontal: 20, marginTop: 8, backgroundColor: colors.card, borderRadius: 20, paddingTop: 16, paddingBottom: 4, borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {categories.map((item) => (
             <Pressable key={item.label} onPress={() => onSearch(item.query)} style={{ width: "25%", alignItems: "center", marginBottom: 14 }}>
