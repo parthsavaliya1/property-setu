@@ -8,20 +8,27 @@ import { useAuth } from "../context/AuthContext";
 import { buttonShadow, colors } from "../theme";
 
 const splashLogo = require("../../assets/center-logo.png");
-const onboardingLogo = require("../../assets/onboarding-logo.png");
 const splashHouse = require("../../assets/splash-house.jpg");
 const loginBg = require("../../assets/login-bg.jpg");
+
+export { OnboardingScreen } from "../components/onboarding";
 
 export function SplashScreen({ onDone }: { onDone: (hasSession: boolean, seen: boolean) => void }) {
   const { ready, session } = useAuth();
   useEffect(() => {
     if (!ready) return;
-    const timer = setTimeout(async () => {
-      const seen = (await AsyncStorage.getItem("propertyhub.onboarded")) === "1";
-      onDone(Boolean(session), seen);
+    let cancel = false;
+    const seenPromise = AsyncStorage.getItem("propertyhub.onboarded").catch(() => null);
+    const timer = setTimeout(() => {
+      seenPromise.then((value) => {
+        if (!cancel) onDone(Boolean(session), value === "1");
+      });
     }, 2200);
-    return () => clearTimeout(timer);
-  }, [ready, session, onDone]);
+    return () => {
+      cancel = true;
+      clearTimeout(timer);
+    };
+  }, [ready, onDone, session]);
 
   const insets = useSafeAreaInsets();
   const { width, height } = Dimensions.get("window");
@@ -31,34 +38,6 @@ export function SplashScreen({ onDone }: { onDone: (hasSession: boolean, seen: b
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <Image source={splashHouse} style={{ position: "absolute", top: 0, left: 0, width, height }} resizeMode="cover" />
       <Image source={splashLogo} style={{ width: logoWidth, height: logoWidth * (1024 / 1536), alignSelf: "center", marginTop: insets.top + 24 }} resizeMode="contain" />
-    </View>
-  );
-}
-
-export function OnboardingScreen({ onDone }: { onDone: () => void }) {
-  const insets = useSafeAreaInsets();
-  async function finish() {
-    await AsyncStorage.setItem("propertyhub.onboarded", "1");
-    onDone();
-  }
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.page, paddingHorizontal: 24, paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 20) }}>
-      <StatusBar barStyle="dark-content" />
-      <Image source={onboardingLogo} style={{ width: 88, height: 46, alignSelf: "flex-start" }} resizeMode="contain" />
-      <Text style={{ marginTop: 18, fontSize: 40, lineHeight: 46, fontWeight: "800", color: colors.ink }}>{"Find. Explore.\nBuy. Rent."}</Text>
-      <Text style={{ marginTop: 14, fontSize: 16, lineHeight: 22, color: colors.muted }}>Your next home is just a search away.</Text>
-      <Image source={splashHouse} style={{ flex: 1, width: "100%", marginVertical: 12 }} resizeMode="contain" />
-      <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, marginBottom: 22 }}>
-        <View style={{ width: 22, height: 8, borderRadius: 8, backgroundColor: colors.primary }} />
-        <View style={{ width: 8, height: 8, borderRadius: 8, backgroundColor: colors.line }} />
-        <View style={{ width: 8, height: 8, borderRadius: 8, backgroundColor: colors.line }} />
-      </View>
-      <Pressable onPress={finish} style={({ pressed }) => ({ backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
-        <Text style={{ color: colors.white, textAlign: "center", fontWeight: "700", fontSize: 16 }}>Next</Text>
-      </Pressable>
-      <Pressable onPress={finish} style={{ marginTop: 18 }}>
-        <Text style={{ color: colors.primary, textAlign: "center", fontWeight: "700", fontSize: 16 }}>Skip</Text>
-      </Pressable>
     </View>
   );
 }

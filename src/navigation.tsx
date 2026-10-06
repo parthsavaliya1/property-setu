@@ -226,7 +226,7 @@ export function RootNavigation() {
   useEffect(() => {
     if (!session || !navigationRef.isReady()) return;
     const current = navigationRef.getCurrentRoute()?.name;
-    if (current === "Login" || current === "Onboarding") {
+    if (current === "Login") {
       navigationRef.reset({ index: 0, routes: [{ name: "Main" }] });
     }
   }, [session]);
@@ -234,10 +234,7 @@ export function RootNavigation() {
   if (!start) {
     return (
       <SplashScreen
-        onDone={(hasSession, seen) => {
-          if (hasSession || seen) setStart("Main");
-          else setStart("Onboarding");
-        }}
+        onDone={(hasSession, seen) => setStart(!seen ? "Onboarding" : hasSession ? "Main" : "Login")}
       />
     );
   }
@@ -255,7 +252,12 @@ export function RootNavigation() {
             fullScreenGestureEnabled: false,
           }}
         >
-          <Stack.Screen name="Onboarding">{() => <OnboardingScreen onDone={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} />}</Stack.Screen>
+          <Stack.Screen name="Onboarding">{() => (
+            <OnboardingScreen
+              onNext={() => navigationRef.reset({ index: 0, routes: [{ name: "Login" }] })}
+              onSkip={() => navigationRef.reset({ index: 0, routes: [{ name: "Login" }] })}
+            />
+          )}</Stack.Screen>
           <Stack.Screen name="Login">{() => <LoginScreen onBrowse={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} />}</Stack.Screen>
           <Stack.Screen name="Main" component={Tabs} />
           <Stack.Screen name="Map">{() => <MapScreen onOpen={openDetails} showBack />}</Stack.Screen>
