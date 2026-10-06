@@ -78,7 +78,7 @@ export function SplashScreen({ onDone }: { onDone: (hasSession: boolean, seen: b
 
 const OTP_LENGTH = 6;
 
-export function LoginScreen({ onBrowse }: { onBrowse: () => void }) {
+export function LoginScreen({ onBrowse, onPrivacy }: { onBrowse: () => void; onPrivacy: () => void }) {
   const auth = useAuth();
   const { t } = useI18n();
   const language = useLanguagePicker();
@@ -89,6 +89,7 @@ export function LoginScreen({ onBrowse }: { onBrowse: () => void }) {
   const [otp, setOtp] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [error, setError] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const green = colors.primary;
@@ -122,6 +123,10 @@ export function LoginScreen({ onBrowse }: { onBrowse: () => void }) {
     }
     if (mode === "signup" && name.trim().length < 2) {
       setError(t.auth.nameInvalid);
+      return;
+    }
+    if (!accepted) {
+      setError(t.auth.privacyRequired);
       return;
     }
     setBusy(true);
@@ -205,7 +210,8 @@ export function LoginScreen({ onBrowse }: { onBrowse: () => void }) {
             <>
               {mode === "signup" ? <AuthField label={t.auth.fullName} value={name} onChangeText={setName} placeholder={t.auth.namePlaceholder} autoCapitalize="words" /> : null}
               <AuthField label={t.auth.mobile} value={phone} onChangeText={(value) => setPhone(digits(value, 10))} keyboardType="number-pad" placeholder={t.auth.mobilePlaceholder} maxLength={10} />
-              <Pressable onPress={sendCode} disabled={busy} style={({ pressed }) => ({ backgroundColor: pressed ? colors.primaryDark : green, borderRadius: 14, height: 52, marginTop: 16, alignItems: "center", justifyContent: "center", opacity: busy ? 0.55 : 1, ...buttonShadow })}>
+              <PrivacyConsent accepted={accepted} onToggle={() => { setAccepted((value) => !value); setError(""); }} onPrivacy={onPrivacy} />
+              <Pressable onPress={sendCode} disabled={!accepted || busy} style={({ pressed }) => ({ backgroundColor: pressed && accepted ? colors.primaryDark : green, borderRadius: 14, height: 52, marginTop: 16, alignItems: "center", justifyContent: "center", opacity: !accepted || busy ? 0.4 : 1, ...(accepted ? buttonShadow : null) })}>
                 <Text style={{ color: colors.white, textAlign: "center", fontWeight: "700", fontSize: 16 }}>{busy ? t.common.sending : t.auth.sendOtp}</Text>
               </Pressable>
               <Text style={{ textAlign: "center", color: colors.muted, marginTop: 16, fontSize: 14 }}>
@@ -233,6 +239,37 @@ export function LoginScreen({ onBrowse }: { onBrowse: () => void }) {
       </Animated.View>
       </View>
     </KeyboardScreen>
+  );
+}
+
+function PrivacyConsent({ accepted, onToggle, onPrivacy }: { accepted: boolean; onToggle: () => void; onPrivacy: () => void }) {
+  const { t } = useI18n();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-start", marginTop: 16 }}>
+      <Pressable
+        onPress={onToggle}
+        hitSlop={10}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: accepted }}
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 6,
+          borderWidth: 1.5,
+          borderColor: accepted ? colors.primary : "#C9BFB6",
+          backgroundColor: accepted ? colors.primary : colors.card,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {accepted ? <Ionicons name="checkmark" size={15} color={colors.white} /> : null}
+      </Pressable>
+      <Text style={{ flex: 1, marginLeft: 10, color: colors.muted, fontSize: 14, lineHeight: 22, includeFontPadding: false }}>
+        <Text onPress={onToggle}>{t.auth.agreeBefore}</Text>
+        <Text onPress={onPrivacy} style={{ color: colors.primary, fontWeight: "800", textDecorationLine: "underline" }}>{t.auth.privacyPolicy}</Text>
+        <Text onPress={onToggle}>{t.auth.agreeAfter}</Text>
+      </Text>
+    </View>
   );
 }
 

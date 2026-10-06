@@ -33,7 +33,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "GharSetu uses photos you choose for property listings."
+          "photosPermission": "PropertySetu uses photos you choose for property listings and chats."
         }
       ],
       [

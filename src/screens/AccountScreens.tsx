@@ -26,6 +26,7 @@ export function MenuScreen({
   onVisits,
   onNotifications,
   onAbout,
+  onPrivacy,
   onSignIn,
 }: {
   onClose?: () => void;
@@ -36,6 +37,7 @@ export function MenuScreen({
   onVisits: () => void;
   onNotifications: () => void;
   onAbout: () => void;
+  onPrivacy: () => void;
   onSignIn: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -51,6 +53,7 @@ export function MenuScreen({
     { label: t.menu.visits, icon: "calendar-outline", onPress: onVisits },
     { label: t.menu.notifications, icon: "notifications-outline", onPress: onNotifications },
     { label: t.menu.about, icon: "information-circle-outline", onPress: onAbout },
+    { label: t.menu.privacy, icon: "shield-checkmark-outline", onPress: onPrivacy },
     { label: t.menu.language, icon: "language-outline", onPress: language.openPicker, value: language.nativeName },
   ];
   return (

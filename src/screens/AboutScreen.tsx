@@ -25,7 +25,7 @@ const FEATURES: { icon: keyof typeof Ionicons.glyphMap; key: "browse" | "search"
   { icon: "flag-outline", key: "report" },
 ];
 
-export function AboutScreen({ onDeleted, onSignIn }: { onDeleted: () => void; onSignIn: () => void }) {
+export function AboutScreen({ onDeleted, onSignIn, onPrivacy }: { onDeleted: () => void; onSignIn: () => void; onPrivacy: () => void }) {
   const { session, deleteAccount } = useAuth();
   const { t } = useI18n();
   const [ask, setAsk] = useState(false);
@@ -84,6 +84,17 @@ export function AboutScreen({ onDeleted, onSignIn }: { onDeleted: () => void; on
             </View>
           ))}
         </View>
+
+        <Pressable onPress={onPrivacy} style={({ pressed }) => ({ ...card, flexDirection: "row", alignItems: "center", gap: 12, opacity: pressed ? 0.75 : 1 })}>
+          <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={colors.primaryDark} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: colors.ink }}>{t.about.privacy}</Text>
+            <Text style={{ marginTop: 2, fontSize: 13, lineHeight: 18, color: colors.muted }}>{t.about.privacyHint}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.faint} />
+        </Pressable>
 
         <Text style={{ textAlign: "center", fontSize: 14, color: colors.faint, marginTop: 8 }}>{fill(t.about.version, { version })}</Text>
 

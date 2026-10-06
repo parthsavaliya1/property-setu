@@ -12,6 +12,7 @@ import { useI18n } from "./i18n";
 import { getRemoteSettings } from "./lib/remoteConfig";
 import { EditProfileScreen, FavoritesScreen, InquiriesScreen, MenuScreen, MyPropertiesScreen, NotificationsScreen, PaymentHistoryScreen, ProfileScreen, VisitsScreen, WalletScreen } from "./screens/AccountScreens";
 import { AboutScreen } from "./screens/AboutScreen";
+import { PrivacyScreen } from "./screens/PrivacyScreen";
 import { ChatScreen, ChatsScreen } from "./screens/ChatScreens";
 import { LoginScreen, OnboardingScreen, SplashScreen } from "./screens/AuthScreens";
 import { DetailsScreen, HomeScreen, MapScreen, SearchScreen } from "./screens/BrowseScreens";
@@ -45,6 +46,7 @@ export type RootStackParamList = {
   Wallet: undefined;
   PaymentHistory: undefined;
   About: undefined;
+  Privacy: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -130,7 +132,7 @@ function MenuRoute() {
   const { t } = useI18n();
   const requireLogin = useRequireLogin();
 
-  function openStack(name: "Chats" | "Inquiries" | "Visits" | "Notifications" | "About" | "Login") {
+  function openStack(name: "Chats" | "Inquiries" | "Visits" | "Notifications" | "About" | "Privacy" | "Login") {
     leaveMenu(() => navigationRef.dispatch(StackActions.replace(name)));
   }
 
@@ -154,6 +156,7 @@ function MenuRoute() {
       onVisits={() => openStack(session ? "Visits" : "Login")}
       onNotifications={() => openStack(session ? "Notifications" : "Login")}
       onAbout={() => openStack("About")}
+      onPrivacy={() => openStack("Privacy")}
       onSignIn={() => openStack("Login")}
     />
   );
@@ -280,7 +283,7 @@ export function RootNavigation() {
               onSkip={() => navigationRef.reset({ index: 0, routes: [{ name: "Login" }] })}
             />
           )}</Stack.Screen>
-          <Stack.Screen name="Login">{() => <LoginScreen onBrowse={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} />}</Stack.Screen>
+          <Stack.Screen name="Login">{() => <LoginScreen onBrowse={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} onPrivacy={() => navigationRef.navigate("Privacy")} />}</Stack.Screen>
           <Stack.Screen name="Main" component={Tabs} />
           <Stack.Screen
             name="Menu"
@@ -293,12 +296,12 @@ export function RootNavigation() {
           </Stack.Screen>
           <Stack.Screen name="Map">{() => <MapScreen onOpen={openDetails} showBack />}</Stack.Screen>
           <Stack.Screen name="Details">{({ route }) => <DetailsScreen id={route.params?.id || ""} onSchedule={(id) => navigationRef.navigate("Schedule", { id })} onChat={(id) => navigationRef.navigate("Chat", { propertyId: id })} />}</Stack.Screen>
-          <Stack.Screen name="Add">{({ route }) => session ? <AddScreen propertyId={route.params?.id} onDone={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} /> : <LoginScreen onBrowse={() => navigationRef.navigate("Main")} />}</Stack.Screen>
+          <Stack.Screen name="Add">{({ route }) => session ? <AddScreen propertyId={route.params?.id} onDone={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} /> : <LoginScreen onBrowse={() => navigationRef.navigate("Main")} onPrivacy={() => navigationRef.navigate("Privacy")} />}</Stack.Screen>
           <Stack.Screen name="Schedule">{({ route }) => <ScheduleScreen id={route.params?.id || ""} onDone={() => navigationRef.navigate("Visits")} />}</Stack.Screen>
           <Stack.Screen name="MyProperties">{() => <MyPropertiesScreen onOpen={openDetails} onEdit={(id) => navigationRef.navigate("Add", { id })} />}</Stack.Screen>
           <Stack.Screen name="Inquiries">{() => <InquiriesScreen onChat={(propertyId, buyerId) => navigationRef.navigate("Chat", { propertyId, buyerId: buyerId || undefined })} />}</Stack.Screen>
           <Stack.Screen name="Visits">{() => <VisitsScreen onOpen={openDetails} />}</Stack.Screen>
-          <Stack.Screen name="EditProfile">{() => session ? <EditProfileScreen /> : <LoginScreen onBrowse={() => navigationRef.navigate("Main")} />}</Stack.Screen>
+          <Stack.Screen name="EditProfile">{() => session ? <EditProfileScreen /> : <LoginScreen onBrowse={() => navigationRef.navigate("Main")} onPrivacy={() => navigationRef.navigate("Privacy")} />}</Stack.Screen>
           <Stack.Screen name="Profile">{() => (
             <ProfileScreen
               showBack
@@ -337,9 +340,11 @@ export function RootNavigation() {
         <Stack.Screen name="About">{() => (
           <AboutScreen
             onSignIn={() => navigationRef.navigate("Login")}
+            onPrivacy={() => navigationRef.navigate("Privacy")}
             onDeleted={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })}
           />
         )}</Stack.Screen>
+        <Stack.Screen name="Privacy" component={PrivacyScreen} />
         </Stack.Navigator>
       </NavigationContainer>
       <Modal visible={Boolean(loginMessage)} transparent animationType="fade" onRequestClose={() => setLoginMessage(null)}>
