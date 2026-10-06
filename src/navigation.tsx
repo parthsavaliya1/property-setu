@@ -1,4 +1,4 @@
-import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
+import { NavigationContainer, NavigatorScreenParams, StackActions, createNavigationContainerRef } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useEffect, useRef, useState } from "react";
@@ -17,10 +17,19 @@ import { LoginScreen, OnboardingScreen, SplashScreen } from "./screens/AuthScree
 import { DetailsScreen, HomeScreen, MapScreen, SearchScreen } from "./screens/BrowseScreens";
 import { AddScreen, ScheduleScreen } from "./screens/ListingScreens";
 
+export type MainTabParamList = {
+  Home: undefined;
+  Search: undefined;
+  Map: undefined;
+  Saved: undefined;
+  Profile: undefined;
+};
+
 export type RootStackParamList = {
   Onboarding: undefined;
   Login: undefined;
-  Main: undefined;
+  Main: NavigatorScreenParams<MainTabParamList> | undefined;
+  Menu: undefined;
   Map: undefined;
   Details: { id: string };
   Add: { id?: string } | undefined;
@@ -39,8 +48,20 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const Tab = createBottomTabNavigator();
+const Tab = createBottomTabNavigator<MainTabParamList>();
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+// Set for the navigation that leaves the menu, so the destination is shown
+// immediately and Home is never revealed while the menu closes.
+let presentInstantly = false;
+
+function leaveMenu(action: () => void) {
+  presentInstantly = true;
+  action();
+  setTimeout(() => {
+    presentInstantly = false;
+  }, 50);
+}
 
 function openDetails(id: string) {
   if (navigationRef.isReady()) navigationRef.navigate("Details", { id });
@@ -104,22 +125,44 @@ function SellTabButton() {
   );
 }
 
+function MenuRoute() {
+  const { session } = useAuth();
+  const { t } = useI18n();
+  const requireLogin = useRequireLogin();
+
+  function openStack(name: "Chats" | "Inquiries" | "Visits" | "Notifications" | "About" | "Login") {
+    leaveMenu(() => navigationRef.dispatch(StackActions.replace(name)));
+  }
+
+  function openTab(screen: "Profile" | "Saved") {
+    leaveMenu(() => navigationRef.navigate("Main", { screen }, { pop: true }));
+  }
+
+  return (
+    <MenuScreen
+      onClose={() => navigationRef.goBack()}
+      onProfile={() => openTab("Profile")}
+      onFavorites={() => openTab("Saved")}
+      onChats={() => {
+        if (!session) {
+          requireLogin(t.gate.messages);
+          return;
+        }
+        openStack("Chats");
+      }}
+      onInquiries={() => openStack(session ? "Inquiries" : "Login")}
+      onVisits={() => openStack(session ? "Visits" : "Login")}
+      onNotifications={() => openStack(session ? "Notifications" : "Login")}
+      onAbout={() => openStack("About")}
+      onSignIn={() => openStack("Login")}
+    />
+  );
+}
+
 function Tabs() {
   const { session, me } = useAuth();
   const { t } = useI18n();
-  const requireLogin = useRequireLogin();
   const [searchQuery, setSearchQuery] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const tabNav = useRef<{ navigate: (name: "Saved" | "Profile") => void } | null>(null);
-
-  function openMenu() {
-    setMenuOpen(true);
-  }
-
-  function closeMenu(after?: () => void) {
-    setMenuOpen(false);
-    after?.();
-  }
 
   function profilePage(showBack: boolean) {
     return (
@@ -136,7 +179,6 @@ function Tabs() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -165,9 +207,7 @@ function Tabs() {
       })}
     >
       <Tab.Screen name="Home">
-        {({ navigation }) => {
-          tabNav.current = navigation;
-          return (
+        {({ navigation }) => (
           <HomeScreen
             onOpen={openDetails}
             onSearch={(query) => {
@@ -176,10 +216,9 @@ function Tabs() {
             }}
             onNotify={() => navigationRef.navigate("Notifications")}
             onWallet={() => navigationRef.navigate("Wallet")}
-            onOpenMenu={openMenu}
+            onOpenMenu={() => navigationRef.navigate("Menu")}
           />
-          );
-        }}
+        )}
       </Tab.Screen>
       <Tab.Screen name="Search">{() => <SearchScreen initialQuery={searchQuery} onOpen={openDetails} />}</Tab.Screen>
       <Tab.Screen
@@ -192,33 +231,8 @@ function Tabs() {
         {() => <MapScreen onOpen={openDetails} />}
       </Tab.Screen>
       <Tab.Screen name="Saved">{() => <FavoritesScreen onOpen={openDetails} />}</Tab.Screen>
-      <Tab.Screen name="Profile">
-        {({ navigation }) => {
-          tabNav.current = navigation;
-          return profilePage(false);
-        }}
-      </Tab.Screen>
+      <Tab.Screen name="Profile">{() => profilePage(false)}</Tab.Screen>
     </Tab.Navigator>
-    <Modal visible={menuOpen} animationType="fade" onRequestClose={() => closeMenu()}>
-      <MenuScreen
-        onClose={() => closeMenu()}
-        onProfile={() => closeMenu(() => tabNav.current?.navigate("Profile"))}
-        onFavorites={() => closeMenu(() => tabNav.current?.navigate("Saved"))}
-        onChats={() => closeMenu(() => {
-          if (!session) {
-            requireLogin(t.gate.messages);
-            return;
-          }
-          navigationRef.navigate("Chats");
-        })}
-        onInquiries={() => closeMenu(() => session ? navigationRef.navigate("Inquiries") : navigationRef.navigate("Login"))}
-        onVisits={() => closeMenu(() => session ? navigationRef.navigate("Visits") : navigationRef.navigate("Login"))}
-        onNotifications={() => closeMenu(() => session ? navigationRef.navigate("Notifications") : navigationRef.navigate("Login"))}
-        onAbout={() => closeMenu(() => navigationRef.navigate("About"))}
-        onSignIn={() => closeMenu(() => navigationRef.navigate("Login"))}
-      />
-    </Modal>
-    </View>
   );
 }
 
@@ -251,11 +265,14 @@ export function RootNavigation() {
       <NavigationContainer key={apiUrl || "local"} ref={navigationRef}>
         <Stack.Navigator
           initialRouteName={start}
-          screenOptions={{
+          screenOptions={() => ({
             headerShown: false,
             gestureEnabled: false,
             fullScreenGestureEnabled: false,
-          }}
+            animation: presentInstantly ? "none" : "default",
+            animationDuration: presentInstantly ? 0 : undefined,
+            animationTypeForReplace: "push",
+          })}
         >
           <Stack.Screen name="Onboarding">{() => (
             <OnboardingScreen
@@ -265,6 +282,15 @@ export function RootNavigation() {
           )}</Stack.Screen>
           <Stack.Screen name="Login">{() => <LoginScreen onBrowse={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} />}</Stack.Screen>
           <Stack.Screen name="Main" component={Tabs} />
+          <Stack.Screen
+            name="Menu"
+            options={() => ({
+              animation: presentInstantly ? "none" : "fade",
+              animationDuration: presentInstantly ? 0 : 200,
+            })}
+          >
+            {() => <MenuRoute />}
+          </Stack.Screen>
           <Stack.Screen name="Map">{() => <MapScreen onOpen={openDetails} showBack />}</Stack.Screen>
           <Stack.Screen name="Details">{({ route }) => <DetailsScreen id={route.params?.id || ""} onSchedule={(id) => navigationRef.navigate("Schedule", { id })} onChat={(id) => navigationRef.navigate("Chat", { propertyId: id })} />}</Stack.Screen>
           <Stack.Screen name="Add">{({ route }) => session ? <AddScreen propertyId={route.params?.id} onDone={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} /> : <LoginScreen onBrowse={() => navigationRef.navigate("Main")} />}</Stack.Screen>
