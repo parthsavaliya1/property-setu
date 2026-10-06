@@ -728,6 +728,24 @@ export function ProfileScreen({
     }
   }
 
+  if (!session) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.page }}>
+        {showBack ? <PageHeader title="Profile" /> : <View style={{ height: insets.top + 8 }} />}
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingBottom: 48 }}>
+          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="person-outline" size={40} color={colors.primary} />
+          </View>
+          <Text style={{ marginTop: 16, fontSize: 24, fontWeight: "800", color: colors.ink }}>Guest</Text>
+          <Text style={{ marginTop: 8, color: colors.muted, textAlign: "center", lineHeight: 22 }}>Please sign in to add a property and manage your listings.</Text>
+          <Pressable onPress={onSignIn} style={({ pressed }) => ({ marginTop: 24, alignSelf: "stretch", backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
+            <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>Sign in</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       {showBack ? <PageHeader title="Profile" /> : <View style={{ height: insets.top + 8 }} />}
@@ -736,23 +754,15 @@ export function ProfileScreen({
           <View style={{ width: 64, height: 64, borderRadius: 32, overflow: "hidden", backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }}>
             {me?.profile?.avatar_url ? <Image source={{ uri: me.profile.avatar_url }} style={{ width: 64, height: 64 }} /> : <Ionicons name="person" size={28} color={colors.primary} />}
           </View>
-          <View style={{ flex: 1, minWidth: 0, paddingRight: session ? 28 : 0 }}>
+          <View style={{ flex: 1, minWidth: 0, paddingRight: 28 }}>
             <Text numberOfLines={1} style={{ fontSize: 20, fontWeight: "800", color: colors.ink }}>{me?.profile?.full_name || "Guest"}</Text>
-            <Text numberOfLines={1} style={{ marginTop: 4, color: colors.muted }}>{session ? me?.profile?.city || (me?.profile?.phone ? `+91 ${me.profile.phone}` : "Your account") : "Sign in to see your account"}</Text>
+            <Text numberOfLines={1} style={{ marginTop: 4, color: colors.muted }}>{me?.profile?.city || (me?.profile?.phone ? `+91 ${me.profile.phone}` : "Your account")}</Text>
           </View>
-          {session ? (
-            <Pressable onPress={onEditProfile} hitSlop={8} style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="create-outline" size={22} color={colors.primary} />
-            </Pressable>
-          ) : null}
+          <Pressable onPress={onEditProfile} hitSlop={8} style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="create-outline" size={22} color={colors.primary} />
+          </Pressable>
         </View>
 
-        {!session ? (
-          <Pressable onPress={onSignIn} style={({ pressed }) => ({ marginTop: 16, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
-            <Text style={{ color: colors.white, fontWeight: "700" }}>Sign in</Text>
-          </Pressable>
-        ) : (
-          <>
             <View style={{ marginTop: 16, backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16 }}>
               <Text style={{ color: colors.muted, fontWeight: "600" }}>Wallet balance</Text>
               <Text style={{ marginTop: 6, fontSize: 30, fontWeight: "800", color: colors.ink }}>{loading ? "..." : inr(balance)}</Text>
@@ -793,8 +803,6 @@ export function ProfileScreen({
               </View>
             ) : null}
             {propertiesPage.loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} /> : null}
-          </>
-        )}
 
         {pendingDelete ? (
           <DeletePropertyDialog
