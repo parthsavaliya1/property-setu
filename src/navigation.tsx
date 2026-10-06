@@ -8,6 +8,7 @@ import { RequireLoginContext, useRequireLogin } from "./context/LoginGate";
 import { RazorpayHost } from "./components/RazorpayCheckout";
 import { buttonShadow, colors } from "./theme";
 import { useAuth } from "./context/AuthContext";
+import { useI18n } from "./i18n";
 import { getRemoteSettings } from "./lib/remoteConfig";
 import { EditProfileScreen, FavoritesScreen, InquiriesScreen, MenuScreen, MyPropertiesScreen, NotificationsScreen, PaymentHistoryScreen, ProfileScreen, VisitsScreen, WalletScreen } from "./screens/AccountScreens";
 import { AboutScreen } from "./screens/AboutScreen";
@@ -47,6 +48,7 @@ function openDetails(id: string) {
 
 function SellTabButton() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const requireLogin = useRequireLogin();
   const ringA = useRef(new Animated.Value(0)).current;
   const ringB = useRef(new Animated.Value(0)).current;
@@ -83,7 +85,7 @@ function SellTabButton() {
     <Pressable
       onPress={() => {
         if (!session) {
-          requireLogin("Sign in to add a property.");
+          requireLogin(t.gate.addProperty);
           return;
         }
         navigationRef.navigate("Add");
@@ -97,13 +99,14 @@ function SellTabButton() {
           <Text style={{ color: colors.white, fontSize: 30, fontWeight: "500", marginTop: -2 }}>+</Text>
         </View>
       </View>
-      <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700", marginTop: -19 }}>Sell</Text>
+      <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700", marginTop: -19 }}>{t.tabs.sell}</Text>
     </Pressable>
   );
 }
 
 function Tabs() {
   const { session, me } = useAuth();
+  const { t } = useI18n();
   const requireLogin = useRequireLogin();
   const [searchQuery, setSearchQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -143,6 +146,7 @@ function Tabs() {
         tabBarInactiveTintColor: colors.faint,
         tabBarStyle: { height: 68, paddingTop: 6, paddingBottom: 8, borderTopColor: colors.line, backgroundColor: colors.page, overflow: "visible" },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabel: route.name === "Home" ? t.tabs.home : route.name === "Search" ? t.tabs.search : route.name === "Saved" ? t.tabs.saved : route.name === "Profile" ? t.tabs.profile : undefined,
         tabBarIcon: ({ color, size, focused }) => {
           if (route.name === "Profile" && session) {
             const letter = (me?.profile?.full_name || "").trim().charAt(0).toUpperCase();
@@ -202,7 +206,7 @@ function Tabs() {
         onFavorites={() => closeMenu(() => tabNav.current?.navigate("Saved"))}
         onChats={() => closeMenu(() => {
           if (!session) {
-            requireLogin("Sign in to see your messages.");
+            requireLogin(t.gate.messages);
             return;
           }
           navigationRef.navigate("Chats");
@@ -220,6 +224,7 @@ function Tabs() {
 
 export function RootNavigation() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const [start, setStart] = useState<keyof RootStackParamList | null>(null);
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
 
@@ -314,11 +319,11 @@ export function RootNavigation() {
       <Modal visible={Boolean(loginMessage)} transparent animationType="fade" onRequestClose={() => setLoginMessage(null)}>
         <View style={{ flex: 1, backgroundColor: "rgba(28,28,28,0.45)", justifyContent: "center", paddingHorizontal: 28 }}>
           <View style={{ backgroundColor: "white", borderRadius: 18, padding: 20 }}>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>Login required</Text>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.gate.title}</Text>
             <Text style={{ marginTop: 8, color: colors.muted, lineHeight: 20 }}>{loginMessage}</Text>
             <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
               <Pressable onPress={() => setLoginMessage(null)} style={{ flex: 1, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: colors.card }}>
-                <Text style={{ fontWeight: "700", color: colors.primary }}>Cancel</Text>
+                <Text style={{ fontWeight: "700", color: colors.primary }}>{t.common.cancel}</Text>
               </Pressable>
               <Pressable
                 onPress={() => {
@@ -327,7 +332,7 @@ export function RootNavigation() {
                 }}
                 style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: 14, backgroundColor: pressed ? colors.primaryDark : colors.primary, alignItems: "center", justifyContent: "center", ...buttonShadow })}
               >
-                <Text style={{ color: colors.white, fontWeight: "700" }}>Login</Text>
+                <Text style={{ color: colors.white, fontWeight: "700" }}>{t.common.login}</Text>
               </Pressable>
             </View>
           </View>

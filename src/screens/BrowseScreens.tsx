@@ -8,6 +8,10 @@ import { PropertyGridCard, PropertyListCard, PropertyListSkeleton } from "../com
 import { PropertyMap } from "../components/PropertyMap";
 import { DetailSkeleton, EmptyState, PageHeader, PropertyGridSkeleton, SkeletonBlock, styles } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
+import { useI18n } from "../i18n";
+import { getCopy } from "../i18n/active";
+import { fill } from "../i18n/format";
+import { amenityName } from "../i18n/labels";
 import { useFavorites } from "../context/FavoritesContext";
 import { api, cityName, inr, listingLabel, PROPERTY_PAGE_SIZE, sortForSearch } from "../lib/api";
 import { nearScrollEnd, usePagedProperties } from "../lib/paging";
@@ -17,8 +21,23 @@ import { buttonShadow, cardShadow, colors } from "../theme";
 import { deviceType } from "../lib/supabase";
 import type { PropertyCard, PropertyDetail } from "../types/database";
 
+function chipText(query: string) {
+  const text = getCopy();
+  if (!query) return text.kinds.all;
+  if (query === "listing_type=sale") return text.home.buy;
+  if (query === "listing_type=rent") return text.home.rent;
+  if (query === "category=residential-plot") return text.kinds.plot;
+  if (query === "category=agricultural-land") return text.kinds.land;
+  if (query === "category=house") return text.kinds.house;
+  if (query === "category=apartment") return text.kinds.apartment;
+  if (query === "category=villa") return text.kinds.villa;
+  if (query === "category=shop") return text.kinds.shop;
+  return query;
+}
+
 function Card({ item, onPress }: { item: PropertyCard; onPress: () => void }) {
-  const place = [item.locality, item.city].filter(Boolean).join(", ") || "Location not added";
+  const { t } = useI18n();
+  const place = [item.locality, item.city].filter(Boolean).join(", ") || t.common.locationMissing;
   return (
     <Pressable style={styles.card} onPress={onPress}>
       {item.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: 140 }} resizeMode="cover" /> : <View style={{ height: 120, backgroundColor: colors.secondary }} />}
@@ -26,7 +45,7 @@ function Card({ item, onPress }: { item: PropertyCard; onPress: () => void }) {
         <Text style={styles.price}>{inr(item.price)}</Text>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.meta}>{place}</Text>
-        <Text style={styles.meta}>{item.bedrooms ?? "—"} bd · {item.bathrooms ?? "—"} ba · {item.area ? `${item.area} ${item.area_unit}` : listingLabel(item.listing_type)}</Text>
+        <Text style={styles.meta}>{item.bedrooms ?? "—"} {t.search.beds} · {item.bathrooms ?? "—"} {t.search.baths} · {item.area ? `${item.area} ${item.area_unit}` : listingLabel(item.listing_type)}</Text>
       </View>
     </Pressable>
   );
@@ -59,12 +78,13 @@ const categories = [
 ];
 
 function LocationPrompt({ denied, canAskAgain, onAllow }: { denied: boolean; canAskAgain: boolean; onAllow: () => void }) {
+  const { t } = useI18n();
   if (!denied) return null;
   return (
     <Pressable onPress={onAllow} style={{ marginTop: 12, borderRadius: 14, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
       <Ionicons name="location-outline" size={20} color={colors.primaryDark} />
-      <Text style={{ flex: 1, color: colors.ink, fontSize: 13, lineHeight: 18 }}>Please allow location to see properties near you.</Text>
-      <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 13 }}>{canAskAgain ? "Allow" : "Settings"}</Text>
+      <Text style={{ flex: 1, color: colors.ink, fontSize: 13, lineHeight: 18 }}>{t.home.locationAsk}</Text>
+      <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 13 }}>{canAskAgain ? t.common.allow : t.common.settings}</Text>
     </Pressable>
   );
 }
@@ -94,6 +114,7 @@ export function HomeScreen({
   onOpenMenu: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const { me, token } = useAuth();
   const { isSaved, toggle } = useFavorites();
   const requireLogin = useRequireLogin();
@@ -163,7 +184,7 @@ export function HomeScreen({
 
   async function toggleSaved(item: PropertyCard) {
     if (!token) {
-      requireLogin("Sign in to save this property.");
+      requireLogin(getCopy().gate.saveProperty);
       return;
     }
     await toggle(item);
@@ -196,8 +217,8 @@ export function HomeScreen({
           </View>
         </Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>{city || (ready ? "All properties" : "Finding city")}</Text>
-          <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 13, color: colors.muted }}>Find your property</Text>
+          <Text numberOfLines={1} style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>{city || (ready ? t.home.allProperties : t.home.findingCity)}</Text>
+          <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 13, color: colors.muted }}>{t.home.findProperty}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Pressable onPress={openNotifications} hitSlop={8} style={{ padding: 4 }}>
@@ -215,7 +236,7 @@ export function HomeScreen({
       </View>
       <View style={{ marginTop: 14, backgroundColor: colors.card, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, height: 52, borderWidth: 1, borderColor: colors.line }}>
         <Ionicons name="search" size={18} color={colors.primary} />
-        <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => { const next = query; setQuery(""); onSearch(next || "all"); }} placeholder="Search house, plot, land..." placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
+        <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => { const next = query; setQuery(""); onSearch(next || "all"); }} placeholder={t.home.searchPlaceholder} placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
       </View>
       <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
     </View>
@@ -236,7 +257,7 @@ export function HomeScreen({
               <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: item.bg, alignItems: "center", justifyContent: "center" }}>
                 <MaterialCommunityIcons name={item.icon} size={26} color={item.color} />
               </View>
-              <Text style={{ marginTop: 6, fontSize: 12, color: colors.ink, fontWeight: "600" }}>{item.label}</Text>
+              <Text style={{ marginTop: 6, fontSize: 12, color: colors.ink, fontWeight: "600" }}>{chipText(item.query)}</Text>
             </Pressable>
           ))}
         </View>
@@ -244,10 +265,10 @@ export function HomeScreen({
       <Pressable onPress={() => onSearch("all")} style={{ marginHorizontal: 20, marginTop: 24, height: 118, borderRadius: 20, overflow: "hidden" }}>
         <Image source={require("../../assets/home-banner.jpg")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
         <View style={{ position: "absolute", left: 14, top: 0, bottom: 0, width: "48%", justifyContent: "center" }}>
-          <Text style={{ color: "white", fontSize: 16, lineHeight: 20, fontWeight: "800" }}>Find Your Dream Home</Text>
-          <Text style={{ color: "rgba(255,255,255,0.9)", marginTop: 2, fontSize: 12 }}>Homes, plots, and land</Text>
+          <Text style={{ color: "white", fontSize: 16, lineHeight: 20, fontWeight: "800" }}>{t.home.dream}</Text>
+          <Text style={{ color: "rgba(255,255,255,0.9)", marginTop: 2, fontSize: 12 }}>{t.home.dreamSub}</Text>
           <View style={{ alignSelf: "flex-start", marginTop: 8, backgroundColor: "white", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 }}>
-            <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>Explore Now</Text>
+            <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>{t.home.explore}</Text>
           </View>
         </View>
       </Pressable>
@@ -256,7 +277,7 @@ export function HomeScreen({
       {!loading && premiumItems.length > 0 ? (
         <>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 20, marginTop: 28, marginBottom: 12 }}>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>Premium Properties</Text>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.home.premium}</Text>
           </View>
           <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }} scrollEventThrottle={16} onScroll={(event) => { if (nearScrollEnd(event, "x")) premiumPage.loadMore(); }}>
             {premiumItems.map((item) => propertyCard(item, cardWidth))}
@@ -266,8 +287,8 @@ export function HomeScreen({
       ) : null}
       {!loading ? (
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 20, marginTop: 28, marginBottom: 12 }}>
-        <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>Simple Properties</Text>
-        <Pressable onPress={() => onSearch("all")}><Text style={{ color: colors.primary, fontWeight: "700" }}>See All</Text></Pressable>
+        <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.home.simple}</Text>
+        <Pressable onPress={() => onSearch("all")}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.home.seeAll}</Text></Pressable>
       </View>
       ) : null}
       {!loading && !error && simpleItems.length === 0 && premiumItems.length === 0 ? <EmptyState kind="active" /> : null}
@@ -284,6 +305,7 @@ export function HomeScreen({
 
 export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; onOpen: (id: string) => void }) {
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const { me, token } = useAuth();
   const { isSaved, toggle } = useFavorites();
   const requireLogin = useRequireLogin();
@@ -349,7 +371,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
 
   async function toggleSaved(item: PropertyCard) {
     if (!token) {
-      requireLogin("Sign in to save this property.");
+      requireLogin(getCopy().gate.saveProperty);
       return;
     }
     await toggle(item);
@@ -393,11 +415,11 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   return (
     <KeyboardScreen style={{ backgroundColor: colors.page }}>
       <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 10, backgroundColor: colors.page, borderBottomWidth: 1, borderBottomColor: colors.line }}>
-        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>Search</Text>
+        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>{t.search.title}</Text>
         <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ flex: 1, borderRadius: 14, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, minHeight: 52, borderWidth: 1, borderColor: colors.line }}>
             <Ionicons name="search" size={18} color={colors.faint} />
-            <TextInput value={q} onChangeText={setQ} placeholder="City, area, or property name" placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 15, paddingVertical: 8 }} />
+            <TextInput value={q} onChangeText={setQ} placeholder={t.search.placeholder} placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 15, paddingVertical: 8 }} />
             {q ? (
               <Pressable onPress={() => setQ("")} hitSlop={8}>
                 <Ionicons name="close-circle" size={18} color={colors.faint} />
@@ -412,7 +434,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
         <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
       </View>
       {error ? <Text style={[styles.error, { marginHorizontal: 20, marginTop: 12 }]}>{error}</Text> : null}
-      {!loading && !error ? <Text style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, color: colors.muted, fontSize: 13 }}>{shown.length} {shown.length === 1 ? "result" : "results"}{q.trim() ? ` • ${q.trim()}` : ""}</Text> : null}
+      {!loading && !error ? <Text style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, color: colors.muted, fontSize: 13 }}>{fill(shown.length === 1 ? t.search.oneResult : t.search.manyResults, { count: shown.length })}{q.trim() ? ` • ${q.trim()}` : ""}</Text> : null}
       <FlatList
         style={{ flex: 1 }}
         data={loading ? [] : shown}
@@ -438,59 +460,59 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
           <Pressable style={{ flex: 1 }} onPress={() => setFiltersOpen(false)} />
           <View style={{ maxHeight: "82%", backgroundColor: colors.page, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 18 }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 10 }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>Filters</Text>
-              <Pressable onPress={clearFilters} hitSlop={8}><Text style={{ color: colors.primary, fontWeight: "700" }}>Clear</Text></Pressable>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.search.filters}</Text>
+              <Pressable onPress={clearFilters} hitSlop={8}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.common.clear}</Text></Pressable>
             </View>
             <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12, gap: 24 }} showsVerticalScrollIndicator={false}>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>Looking for</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.lookingFor}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {typeChips.map((chip) => (
-                    <LeVechChip key={chip.label} label={chip.label} active={tabActive(chip.query)} onPress={() => selectTab(chip.query)} />
+                    <LeVechChip key={chip.query || "all"} label={chipText(chip.query)} active={tabActive(chip.query)} onPress={() => selectTab(chip.query)} />
                   ))}
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>Type</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.type}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {[{ id: "", label: "Any type" }, ...propertyTypes].map((option) => (
+                  {[{ id: "", label: t.search.anyType }, ...propertyTypes.map((option) => ({ ...option, label: chipText(`category=${option.id}`) }))].map((option) => (
                     <LeVechChip key={option.id || "type"} label={option.label} active={propertyType === option.id} onPress={() => setPropertyType(option.id)} />
                   ))}
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>Price</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.price}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {[{ id: "", label: "Any price" }, ...priceRanges].map((option) => (
+                  {[{ id: "", label: t.search.anyPrice }, ...priceRanges.map((option) => ({ ...option, label: option.id === "under25" ? t.search.under25 : option.id === "25to50" ? t.search.range25 : option.id === "50to1cr" ? t.search.range50 : t.search.above1 }))].map((option) => (
                     <LeVechChip key={option.id || "price"} label={option.label} active={price === option.id} onPress={() => setPrice(option.id)} />
                   ))}
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>BHK</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.bhk}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {[{ id: "", label: "Any" }, { id: "1", label: "1 BHK" }, { id: "2", label: "2 BHK" }, { id: "3", label: "3 BHK" }, { id: "4", label: "4+ BHK" }].map((option) => (
+                  {[{ id: "", label: t.search.any }, { id: "1", label: t.search.bhk1 }, { id: "2", label: t.search.bhk2 }, { id: "3", label: t.search.bhk3 }, { id: "4", label: t.search.bhk4 }].map((option) => (
                     <LeVechChip key={option.id || "beds"} label={option.label} active={bedrooms === option.id} onPress={() => setBedrooms(option.id)} />
                   ))}
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>More</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.more}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  <LeVechChip label="Photos" active={withPhotos} onPress={() => setWithPhotos((value) => !value)} />
+                  <LeVechChip label={t.search.photos} active={withPhotos} onPress={() => setWithPhotos((value) => !value)} />
                 </View>
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>Sort</Text>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.sort}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {[{ id: "newest", label: "Newest" }, { id: "low", label: "Price: Low to high" }, { id: "high", label: "Price: High to low" }].map((option) => (
+                  {[{ id: "newest", label: t.search.newest }, { id: "low", label: t.search.priceLow }, { id: "high", label: t.search.priceHigh }].map((option) => (
                     <LeVechChip key={option.id} label={option.label} active={sort === option.id} onPress={() => setSort(option.id)} />
                   ))}
                 </View>
               </View>
             </ScrollView>
             <Pressable onPress={() => setFiltersOpen(false)} style={({ pressed }) => ({ marginHorizontal: 20, marginTop: 4, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
-              <Text style={{ color: colors.white, fontWeight: "700" }}>Show properties</Text>
+              <Text style={{ color: colors.white, fontWeight: "700" }}>{t.search.show}</Text>
             </Pressable>
           </View>
         </View>
@@ -536,6 +558,7 @@ function LeVechChip({ label, active, onPress }: { label: string; active?: boolea
 }
 
 export function MapScreen({ onOpen, showBack }: { onOpen: (id: string) => void; showBack?: boolean }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<PropertyCard[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -544,7 +567,7 @@ export function MapScreen({ onOpen, showBack }: { onOpen: (id: string) => void; 
   const pins = items.filter((item) => item.latitude && item.longitude);
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      {showBack ? <PageHeader title="Map" /> : null}
+      {showBack ? <PageHeader title={t.search.map} /> : null}
       {loading ? <View style={{ flex: 1, margin: 16 }}><SkeletonBlock fill radius={16} /></View> : <PropertyMap pins={pins} onOpen={onOpen} />}
     </View>
   );
@@ -682,7 +705,7 @@ function PhotoZoom({ photos, startIndex, onClose }: { photos: string[]; startInd
               {photos.map((_, photo) => <View key={photo} style={{ width: photo === index ? 16 : 7, height: 7, borderRadius: 4, backgroundColor: photo === index ? "white" : "rgba(255,255,255,0.45)" }} />)}
             </View>
           ) : null}
-          <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: "600" }}>Pinch or double-tap to zoom</Text>
+          <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: "600" }}>{getCopy().search.zoomHint}</Text>
         </View>
       </View>
     </Modal>
@@ -690,6 +713,7 @@ function PhotoZoom({ photos, startIndex, onClose }: { photos: string[]; startInd
 }
 
 export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedule: (propertyId: string) => void; onChat: (propertyId: string) => void }) {
+  const { t } = useI18n();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { token, session } = useAuth();
@@ -744,7 +768,7 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
 
   async function save() {
     if (!token || !item) {
-      requireLogin("Sign in to save this property.");
+      requireLogin(getCopy().gate.saveProperty);
       return;
     }
     await toggle(item);
@@ -766,7 +790,7 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
   }
 
   if (loading && !item) return <DetailSkeleton />;
-  if (!item) return <View style={[styles.body, { backgroundColor: "white", flex: 1 }]}><Text>{note || "This property is not available."}</Text></View>;
+  if (!item) return <View style={[styles.body, { backgroundColor: "white", flex: 1 }]}><Text>{note || t.search.unavailable}</Text></View>;
 
   const liked = isSaved(item.id, item.is_favorite);
   const mine = item.owner_id === session?.user.id;
@@ -774,15 +798,15 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
     ? item.images.filter((image) => image.image_type !== "video").map((image) => image.image_url)
     : [item.cover_image]
   ).filter(Boolean) as string[];
-  const place = [item.locality, item.city, item.state].filter(Boolean).join(", ") || "Location not added";
+  const place = [item.locality, item.city, item.state].filter(Boolean).join(", ") || t.common.locationMissing;
   const phone = (item.owner_phone || "").replace(/[^\d+]/g, "");
   const area = item.area ? Number(item.area).toLocaleString("en-IN") : "—";
-  const description = item.description || "No description yet.";
+  const description = item.description || t.details.noDescription;
   const tabs = [
-    { id: "overview" as const, label: "Overview" },
-    { id: "amenities" as const, label: "Amenities" },
-    { id: "location" as const, label: "Location" },
-    { id: "documents" as const, label: "Documents" },
+    { id: "overview" as const, label: t.details.overview },
+    { id: "amenities" as const, label: t.details.amenities },
+    { id: "location" as const, label: t.details.location },
+    { id: "documents" as const, label: t.details.documents },
   ];
 
   return (
@@ -831,7 +855,7 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
         <View style={{ backgroundColor: colors.page, paddingHorizontal: 20, paddingTop: 20, flexGrow: 1 }}>
           {item.listing_label === "Premium" || item.is_premium ? (
             <View style={{ alignSelf: "flex-start", backgroundColor: "#f8e7c0", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 8 }}>
-              <Text style={{ color: "#8a5a12", fontSize: 11, fontWeight: "800" }}>Premium</Text>
+              <Text style={{ color: "#8a5a12", fontSize: 11, fontWeight: "800" }}>{t.common.premium}</Text>
             </View>
           ) : null}
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -846,13 +870,13 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14 }}>
             <Text style={{ fontSize: 28, fontWeight: "800", color: colors.primary }}>{inr(item.price)}</Text>
-            {item.is_price_negotiable ? <View style={{ backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: colors.white, fontWeight: "700", fontSize: 13 }}>Negotiable</Text></View> : null}
+            {item.is_price_negotiable ? <View style={{ backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: colors.white, fontWeight: "700", fontSize: 13 }}>{t.details.negotiable}</Text></View> : null}
           </View>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 18 }}>
-            <Fact icon="bed-outline" value={String(item.bedrooms ?? "—")} label="Bedrooms" />
-            <Fact icon="water-outline" value={String(item.bathrooms ?? "—")} label="Bathrooms" />
-            <Fact icon="car-outline" value={item.parking_spaces != null ? String(item.parking_spaces) : "—"} label="Parking" />
-            <Fact value={area} label="Sq.ft" />
+            <Fact icon="bed-outline" value={String(item.bedrooms ?? "—")} label={t.details.bedrooms} />
+            <Fact icon="water-outline" value={String(item.bathrooms ?? "—")} label={t.details.bathrooms} />
+            <Fact icon="car-outline" value={item.parking_spaces != null ? String(item.parking_spaces) : "—"} label={t.details.parking} />
+            <Fact value={area} label={t.details.sqft} />
           </View>
           <View style={{ flexDirection: "row", marginTop: 22, borderBottomWidth: 1, borderBottomColor: colors.lineSoft }}>
             {tabs.map((entry) => {
@@ -870,7 +894,7 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
             {tab === "overview" ? (
               <View>
                 <Text style={{ color: colors.muted, fontSize: 15, lineHeight: 23 }} numberOfLines={expanded ? undefined : 4}>{description}</Text>
-                {description.length > 90 ? <Pressable onPress={() => setExpanded((value) => !value)}><Text style={{ color: colors.primary, fontWeight: "700", marginTop: 10 }}>{expanded ? "Show Less" : "Read More"}</Text></Pressable> : null}
+                {description.length > 90 ? <Pressable onPress={() => setExpanded((value) => !value)}><Text style={{ color: colors.primary, fontWeight: "700", marginTop: 10 }}>{expanded ? t.details.showLess : t.details.readMore}</Text></Pressable> : null}
               </View>
             ) : null}
             {tab === "amenities" ? (
@@ -879,11 +903,11 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
                   {item.amenities.map((amenity) => (
                     <View key={amenity.id} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 }}>
                       <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
-                      <Text style={{ color: colors.ink, fontWeight: "600" }}>{amenity.name}</Text>
+                      <Text style={{ color: colors.ink, fontWeight: "600" }}>{amenityName(amenity.slug, amenity.name)}</Text>
                     </View>
                   ))}
                 </View>
-              ) : <Text style={{ color: colors.muted }}>No amenities listed.</Text>
+              ) : <Text style={{ color: colors.muted }}>{t.details.noAmenities}</Text>
             ) : null}
             {tab === "location" ? (
               <View style={{ backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.line, padding: 16 }}>
@@ -893,8 +917,8 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
             ) : null}
             {tab === "documents" ? (
               <View style={{ gap: 8 }}>
-                <Text style={{ color: colors.muted, lineHeight: 20 }}>Documents are shared after you enquire.</Text>
-                <Pressable onPress={() => onSchedule(item.id)}><Text style={{ color: colors.primary, fontWeight: "700" }}>Schedule a visit</Text></Pressable>
+                <Text style={{ color: colors.muted, lineHeight: 20 }}>{t.details.docsHint}</Text>
+                <Pressable onPress={() => onSchedule(item.id)}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.details.schedule}</Text></Pressable>
               </View>
             ) : null}
           </View>
@@ -902,21 +926,21 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
         </View>
       </ScrollView>
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.lineSoft, gap: 8 }}>
-        <Pressable onPress={() => { if (!token) { requireLogin("Sign in to schedule a visit."); return; } onSchedule(item.id); }} style={({ pressed }) => ({ height: 52, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
-          <Text style={{ color: colors.white, fontWeight: "700" }}>Schedule a visit</Text>
+        <Pressable onPress={() => { if (!token) { requireLogin(t.gate.scheduleVisit); return; } onSchedule(item.id); }} style={({ pressed }) => ({ height: 52, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
+          <Text style={{ color: colors.white, fontWeight: "700" }}>{t.details.schedule}</Text>
         </Pressable>
         <View style={{ flexDirection: "row", gap: 8 }}>
-        <Pressable onPress={() => phone ? Linking.openURL(`tel:${phone}`) : setNote("Phone number is not available.")} style={{ flex: 0.9, height: 52, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, backgroundColor: colors.card }}>
+        <Pressable onPress={() => phone ? Linking.openURL(`tel:${phone}`) : setNote(t.details.noPhone)} style={{ flex: 0.9, height: 52, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, backgroundColor: colors.card }}>
           <Ionicons name="call-outline" size={16} color={colors.primary} />
-          <Text style={{ fontWeight: "700", color: colors.primary }}>Call</Text>
+          <Text style={{ fontWeight: "700", color: colors.primary }}>{t.common.call}</Text>
         </Pressable>
-        <Pressable onPress={() => phone ? Linking.openURL(`https://wa.me/${phone.replace(/^\+/, "")}`) : setNote("Phone number is not available.")} style={{ flex: 1.25, height: 52, backgroundColor: "#128C7E", borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 }}>
+        <Pressable onPress={() => phone ? Linking.openURL(`https://wa.me/${phone.replace(/^\+/, "")}`) : setNote(t.details.noPhone)} style={{ flex: 1.25, height: 52, backgroundColor: "#128C7E", borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 }}>
           <Ionicons name="logo-whatsapp" size={18} color="white" />
-          <Text style={{ color: "white", fontWeight: "700" }}>WhatsApp</Text>
+          <Text style={{ color: "white", fontWeight: "700" }}>{t.common.whatsapp}</Text>
         </Pressable>
         <Pressable onPress={chat} style={({ pressed }) => ({ flex: 1.15, height: 52, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 })}>
           <Ionicons name="chatbubble-ellipses" size={16} color="white" />
-          <Text style={{ color: "white", fontWeight: "700" }}>Chat</Text>
+          <Text style={{ color: "white", fontWeight: "700" }}>{t.common.chat}</Text>
         </Pressable>
         </View>
       </View>
@@ -928,15 +952,15 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
               <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#F8E8E6", alignItems: "center", justifyContent: "center", alignSelf: "center" }}>
                 <Ionicons name="trash-outline" size={24} color={colors.danger} />
               </View>
-              <Text style={{ marginTop: 14, fontSize: 18, fontWeight: "800", color: colors.ink, textAlign: "center" }}>{deleteError ? "Could not delete property" : "Delete property"}</Text>
-              <Text style={{ marginTop: 8, color: colors.muted, lineHeight: 20, textAlign: "center" }}>{deleteError || `Delete “${item.title}”? This removes the listing for everyone. This cannot be undone.`}</Text>
+              <Text style={{ marginTop: 14, fontSize: 18, fontWeight: "800", color: colors.ink, textAlign: "center" }}>{deleteError ? t.details.deleteFailed : t.details.deleteTitle}</Text>
+              <Text style={{ marginTop: 8, color: colors.muted, lineHeight: 20, textAlign: "center" }}>{deleteError || fill(t.details.deleteBody, { title: item.title })}</Text>
               <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
                 <Pressable onPress={() => { setAskDelete(false); setDeleteError(""); }} disabled={deleting} style={{ flex: 1, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, alignItems: "center", justifyContent: "center", opacity: deleting ? 0.6 : 1 }}>
-                  <Text style={{ fontWeight: "700", color: colors.primary }}>{deleteError ? "Close" : "Cancel"}</Text>
+                  <Text style={{ fontWeight: "700", color: colors.primary }}>{deleteError ? t.common.close : t.common.cancel}</Text>
                 </Pressable>
                 {deleteError ? null : (
                   <Pressable onPress={() => void removeListing()} disabled={deleting} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: 14, backgroundColor: pressed ? "#9A2E24" : colors.danger, alignItems: "center", justifyContent: "center", opacity: deleting ? 0.7 : 1 })}>
-                    <Text style={{ color: colors.white, fontWeight: "700" }}>{deleting ? "Deleting..." : "Delete"}</Text>
+                    <Text style={{ color: colors.white, fontWeight: "700" }}>{deleting ? t.common.deleting : t.common.delete}</Text>
                   </Pressable>
                 )}
               </View>

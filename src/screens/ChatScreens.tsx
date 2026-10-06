@@ -9,6 +9,9 @@ import { KeyboardScreen, useKeyboardOverlap } from "../components/keyboard";
 import { io, type Socket } from "socket.io-client";
 import { ListSkeleton } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
+import { useI18n } from "../i18n";
+import { getCopy, getLocale } from "../i18n/active";
+import { fill } from "../i18n/format";
 import { api, apiBase, uploadMedia } from "../lib/api";
 import { colors } from "../theme";
 import type { ChatMessage, ChatThread } from "../types/database";
@@ -36,14 +39,14 @@ function sameDay(a: Date, b: Date) {
 function formatStamp(value?: string) {
   if (!value) return "";
   const date = new Date(value);
-  const month = date.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-  const time = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const month = date.toLocaleDateString(getLocale(), { month: "short" }).toUpperCase();
+  const time = date.toLocaleTimeString(getLocale(), { hour: "numeric", minute: "2-digit" });
   return `${date.getDate()} ${month} AT ${time}`;
 }
 
 function clock(value?: string | null) {
   if (!value) return "";
-  return new Date(value).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  return new Date(value).toLocaleTimeString(getLocale(), { hour: "numeric", minute: "2-digit" });
 }
 
 function threadWhen(value?: string | null) {
@@ -53,18 +56,18 @@ function threadWhen(value?: string | null) {
   if (sameDay(date, now)) return clock(value);
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (sameDay(date, yesterday)) return "Yesterday";
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  if (sameDay(date, yesterday)) return getCopy().common.yesterday;
+  return date.toLocaleDateString(getLocale(), { day: "numeric", month: "short" });
 }
 
 function dayLabel(value: string) {
   const date = new Date(value);
   const now = new Date();
-  if (sameDay(date, now)) return "Today";
+  if (sameDay(date, now)) return getCopy().common.today;
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (sameDay(date, yesterday)) return "Yesterday";
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "long" });
+  if (sameDay(date, yesterday)) return getCopy().common.yesterday;
+  return date.toLocaleDateString(getLocale(), { day: "numeric", month: "long" });
 }
 
 function initial(name?: string | null) {
@@ -74,17 +77,17 @@ function initial(name?: string | null) {
 
 function quoteText(item: Pick<ChatMessage, "deleted" | "body" | "attachment_kind" | "attachment_name" | "reply_deleted" | "reply_body" | "reply_kind" | "reply_name"> & { useReply?: boolean }) {
   if (item.useReply) {
-    if (item.reply_deleted) return "This message was deleted";
+    if (item.reply_deleted) return getCopy().chat.deleted;
     if (item.reply_body?.trim()) return item.reply_body.trim();
-    if (item.reply_kind === "image") return "Photo";
-    if (item.reply_kind === "document") return item.reply_name || "Document";
-    return "Message";
+    if (item.reply_kind === "image") return getCopy().common.photo;
+    if (item.reply_kind === "document") return item.reply_name || getCopy().common.document;
+    return getCopy().common.message;
   }
-  if (item.deleted) return "This message was deleted";
+  if (item.deleted) return getCopy().chat.deleted;
   if (item.body?.trim()) return item.body.trim();
-  if (item.attachment_kind === "image") return "Photo";
-  if (item.attachment_kind === "document") return item.attachment_name || "Document";
-  return "Message";
+  if (item.attachment_kind === "image") return getCopy().common.photo;
+  if (item.attachment_kind === "document") return item.attachment_name || getCopy().common.document;
+  return getCopy().common.message;
 }
 
 function addMessage(current: ChatMessage[], message: ChatMessage, mineId?: string) {
@@ -109,6 +112,7 @@ function markDeleted(current: ChatMessage[], messageId: string) {
 }
 
 export function ChatsScreen({ onOpen }: { onOpen: (id: string) => void }) {
+  const { t } = useI18n();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
@@ -140,8 +144,8 @@ export function ChatsScreen({ onOpen }: { onOpen: (id: string) => void }) {
           <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>Messages</Text>
-          <Text style={{ marginTop: 1, color: colors.muted, fontSize: 13 }}>{items.length ? `${items.length} chat${items.length === 1 ? "" : "s"}` : "Your property chats"}</Text>
+          <Text style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>{t.chat.title}</Text>
+          <Text style={{ marginTop: 1, color: colors.muted, fontSize: 13 }}>{items.length ? fill(items.length === 1 ? t.chat.one : t.chat.many, { count: items.length }) : t.chat.yours}</Text>
         </View>
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
@@ -151,8 +155,8 @@ export function ChatsScreen({ onOpen }: { onOpen: (id: string) => void }) {
             <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
               <Ionicons name="chatbubbles-outline" size={36} color={colors.primary} />
             </View>
-            <Text style={{ marginTop: 14, fontSize: 18, fontWeight: "800", color: colors.ink }}>No chats yet</Text>
-            <Text style={{ marginTop: 6, color: colors.muted, textAlign: "center" }}>Start a conversation from a property.</Text>
+            <Text style={{ marginTop: 14, fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.chat.empty}</Text>
+            <Text style={{ marginTop: 6, color: colors.muted, textAlign: "center" }}>{t.chat.emptyHint}</Text>
           </View>
         ) : null}
         {!loading ? items.map((item) => (
@@ -162,12 +166,12 @@ export function ChatsScreen({ onOpen }: { onOpen: (id: string) => void }) {
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Text numberOfLines={1} style={{ flex: 1, fontSize: 16, fontWeight: "800", color: colors.ink }}>{item.other_name || "PropertySetu user"}</Text>
+                <Text numberOfLines={1} style={{ flex: 1, fontSize: 16, fontWeight: "800", color: colors.ink }}>{item.other_name || t.chat.user}</Text>
                 <Text style={{ color: colors.faint, fontSize: 12, fontWeight: "600" }}>{threadWhen(item.last_at || item.created_at)}</Text>
               </View>
-              <Text numberOfLines={1} style={{ marginTop: 2, color: colors.muted, fontSize: 13 }}>{item.property_title || "Property"}</Text>
+              <Text numberOfLines={1} style={{ marginTop: 2, color: colors.muted, fontSize: 13 }}>{item.property_title || t.common.property}</Text>
               <Text numberOfLines={1} style={{ marginTop: 3, color: item.last_message === "This message was deleted" ? colors.faint : colors.ink, fontSize: 14, fontStyle: item.last_message === "This message was deleted" ? "italic" : "normal" }}>
-                {item.last_message || "No messages yet"}
+                {item.last_message === "This message was deleted" ? t.chat.deleted : item.last_message || t.chat.none}
               </Text>
             </View>
           </Pressable>
@@ -178,6 +182,7 @@ export function ChatsScreen({ onOpen }: { onOpen: (id: string) => void }) {
 }
 
 export function ChatScreen({ conversationId, propertyId, buyerId }: { conversationId?: string; propertyId?: string; buyerId?: string }) {
+  const { t } = useI18n();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const keyboardOverlap = useKeyboardOverlap();
@@ -207,7 +212,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
   useEffect(() => {
     if (!token) {
       setLoading(false);
-      setError("Sign in to chat.");
+      setError(t.chat.signIn);
       return;
     }
     const sessionToken = token;
@@ -215,7 +220,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
     async function load() {
       try {
         const id = conversationId || (propertyId ? (await api.openChat(propertyId, sessionToken, buyerId)).id : "");
-        if (!id) throw new Error("Chat not found");
+        if (!id) throw new Error(t.chat.notFound);
         if (!active) return;
         setThreadId(id);
         const [rows, meta] = await Promise.all([
@@ -226,7 +231,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
         setItems(rows);
         if (meta) setThread(meta);
       } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : "Could not open chat");
+        if (active) setError(err instanceof Error ? err.message : t.chat.openFailed);
       } finally {
         if (active) setLoading(false);
       }
@@ -295,7 +300,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
       setReply(null);
       setAttachOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send");
+      setError(err instanceof Error ? err.message : t.chat.sendFailed);
     } finally {
       setSending(false);
     }
@@ -305,7 +310,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
     if (sending) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError("Photo permission is required.");
+      setError(t.listing.photoPermission);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
@@ -343,16 +348,16 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
       const result = await api.reactMessage(threadId, item.id, emoji, token);
       setItems((current) => current.map((row) => row.id === item.id ? { ...row, reactions: result.reactions } : row));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not react");
+      setError(err instanceof Error ? err.message : t.chat.reactFailed);
     }
   }
 
   function removeMessage(item: ChatMessage) {
     if (!token || !threadId) return;
-    Alert.alert("Delete message", "This message will be removed for everyone in the chat.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t.chat.deleteTitle, t.chat.deleteBody, [
+      { text: t.common.cancel, style: "cancel" },
       {
-        text: "Delete",
+        text: t.common.delete,
         style: "destructive",
         onPress: async () => {
           try {
@@ -360,14 +365,14 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
             setItems((current) => markDeleted(current, item.id));
             if (reply?.id === item.id) setReply(null);
           } catch (err) {
-            setError(err instanceof Error ? err.message : "Could not delete");
+            setError(err instanceof Error ? err.message : t.chat.deleteFailed);
           }
         },
       },
     ]);
   }
 
-  const name = thread?.other_name || "Chat";
+  const name = thread?.other_name || t.chat.fallback;
   return (
     <KeyboardScreen style={{ backgroundColor: "#EFE6DA" }}>
       <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 8, paddingBottom: 10, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -379,7 +384,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={{ fontSize: 17, fontWeight: "800", color: colors.ink }}>{name}</Text>
-          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, marginTop: 1 }}>{thread?.property_title || "Property chat"}</Text>
+          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, marginTop: 1 }}>{thread?.property_title || t.chat.propertyChat}</Text>
         </View>
       </View>
 
@@ -408,7 +413,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
                       </View>
                     ) : null}
                     {item.deleted ? (
-                      <Text style={{ color: mine ? "rgba(255,255,255,0.85)" : colors.muted, fontStyle: "italic", paddingHorizontal: 4 }}>This message was deleted</Text>
+                      <Text style={{ color: mine ? "rgba(255,255,255,0.85)" : colors.muted, fontStyle: "italic", paddingHorizontal: 4 }}>{t.chat.deleted}</Text>
                     ) : (
                       <>
                         {item.attachment_kind === "image" && item.attachment_url ? (
@@ -417,7 +422,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
                         {item.attachment_kind === "document" && item.attachment_url ? (
                           <Pressable onPress={() => Linking.openURL(item.attachment_url!)} style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: mine ? "rgba(255,255,255,0.16)" : colors.page, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, minWidth: 180 }}>
                             <Ionicons name="document-text" size={22} color={mine ? colors.white : colors.primaryDark} />
-                            <Text style={{ flex: 1, color: mine ? colors.white : colors.ink, fontWeight: "700" }} numberOfLines={2}>{item.attachment_name || "Document"}</Text>
+                            <Text style={{ flex: 1, color: mine ? colors.white : colors.ink, fontWeight: "700" }} numberOfLines={2}>{item.attachment_name || t.common.document}</Text>
                           </Pressable>
                         ) : null}
                         {item.body ? <Text style={{ color: mine ? colors.white : colors.ink, fontSize: 15, lineHeight: 20, paddingHorizontal: 4 }}>{item.body}</Text> : null}
@@ -441,7 +446,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
           })}
           {!items.length && !error ? (
             <View style={{ alignSelf: "center", marginTop: 24, backgroundColor: "rgba(255,255,255,0.8)", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
-              <Text style={{ color: colors.muted }}>Say hello about this property.</Text>
+              <Text style={{ color: colors.muted }}>{t.chat.hello}</Text>
             </View>
           ) : null}
         </ScrollView>
@@ -452,7 +457,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
       {reply ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 12, marginBottom: 8, padding: 10, borderRadius: 12, backgroundColor: "#FAFAFA", borderWidth: 1, borderColor: "#EFEFEF" }}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.primary }}>Replying to</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.primary }}>{t.chat.replying}</Text>
             <Text numberOfLines={1} style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}>{quoteText(reply)}</Text>
           </View>
           <Pressable onPress={() => setReply(null)} hitSlop={8}>
@@ -481,11 +486,11 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
         <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingBottom: 8 }}>
           <Pressable onPress={pickImage} style={{ flex: 1, backgroundColor: colors.card, borderRadius: 14, paddingVertical: 12, alignItems: "center", gap: 4 }}>
             <Ionicons name="image" size={22} color={colors.primary} />
-            <Text style={{ fontWeight: "700", color: colors.ink }}>Photo</Text>
+            <Text style={{ fontWeight: "700", color: colors.ink }}>{t.common.photo}</Text>
           </Pressable>
           <Pressable onPress={pickDocument} style={{ flex: 1, backgroundColor: colors.card, borderRadius: 14, paddingVertical: 12, alignItems: "center", gap: 4 }}>
             <Ionicons name="document-text" size={22} color={colors.primary} />
-            <Text style={{ fontWeight: "700", color: colors.ink }}>Document</Text>
+            <Text style={{ fontWeight: "700", color: colors.ink }}>{t.common.document}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -498,7 +503,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
           <TextInput
             value={draft}
             onChangeText={setDraft}
-            placeholder={sending ? "Sending..." : "Message"}
+            placeholder={sending ? t.chat.sending : t.chat.message}
             placeholderTextColor={colors.faint}
             multiline
             style={{ flex: 1, maxHeight: 120, paddingVertical: 12, color: colors.ink, fontSize: 16 }}
@@ -518,7 +523,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
                   <Pressable onPress={() => setEmojiOpen(false)} hitSlop={8} style={{ alignSelf: "flex-start", paddingHorizontal: 10, paddingBottom: 4 }}>
                     <Ionicons name="chevron-back" size={22} color={colors.ink} />
                   </Pressable>
-                  <Text style={{ textAlign: "center", color: colors.faint, fontSize: 12, fontWeight: "600", marginBottom: 6 }}>Pick a reaction</Text>
+                  <Text style={{ textAlign: "center", color: colors.faint, fontSize: 12, fontWeight: "600", marginBottom: 6 }}>{t.chat.pickReaction}</Text>
                   <ScrollView contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 6 }}>
                     {MORE_REACTIONS.map((emoji) => (
                       <Pressable key={emoji} onPress={() => react(menu, emoji)} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
@@ -547,12 +552,12 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
                 <Text style={{ textAlign: "center", fontSize: 11, fontWeight: "600", color: "#8E8E8E", letterSpacing: 0.6, paddingTop: 16, paddingBottom: 12 }}>{formatStamp(menu.created_at)}</Text>
                 <Pressable onPress={() => { const target = replyTarget(menu); setReply(target); setMenu(null); setEmojiOpen(false); }} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 20 }}>
                   <Ionicons name="arrow-undo-outline" size={24} color={colors.ink} />
-                  <Text style={{ marginLeft: 14, fontSize: 16, color: colors.ink }}>Reply</Text>
+                  <Text style={{ marginLeft: 14, fontSize: 16, color: colors.ink }}>{t.chat.reply}</Text>
                 </Pressable>
                 {menu.mine && !menu.deleted ? (
                   <Pressable onPress={() => { const chosen = menu; setMenu(null); setEmojiOpen(false); removeMessage(chosen); }} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 20 }}>
                     <Ionicons name="trash-outline" size={24} color="#ED4956" />
-                    <Text style={{ marginLeft: 14, fontSize: 16, color: "#ED4956" }}>Delete</Text>
+                    <Text style={{ marginLeft: 14, fontSize: 16, color: "#ED4956" }}>{t.common.delete}</Text>
                   </Pressable>
                 ) : null}
               </View>

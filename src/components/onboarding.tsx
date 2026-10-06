@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Image,
@@ -18,6 +18,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useI18n } from "../i18n";
 import { colors } from "../theme";
 
 const findHero = require("../../assets/onboarding-house.png");
@@ -390,13 +391,14 @@ export function PropertyPreviewCard({
 }
 
 function SearchField({ variant }: { variant: "place" | "filter" }) {
+  const { t } = useI18n();
   const frame = useOnboardingFrame();
   const circle = frame.control - (variant === "place" ? 8 : 0);
   const field = (
     <View
       accessible
       accessibilityRole="text"
-      accessibilityLabel="Search by city, area or landmark"
+      accessibilityLabel={t.onboarding.searchPlaceholder}
       style={[
         styles.search,
         {
@@ -414,7 +416,7 @@ function SearchField({ variant }: { variant: "place" | "filter" }) {
         color={variant === "place" ? palette.green : palette.iconMuted}
       />
       <Text numberOfLines={1} style={[styles.placeholder, frame.short ? styles.placeholderShort : null]}>
-        Search by city, area or landmark...
+        {t.onboarding.searchPlaceholder}
       </Text>
       {variant === "place" ? (
         <View style={[styles.circle, { width: circle, height: circle, borderRadius: circle / 2 }]}>
@@ -442,7 +444,15 @@ function SearchField({ variant }: { variant: "place" | "filter" }) {
 }
 
 function CategoryRow() {
+  const { t } = useI18n();
   const [selected, setSelected] = useState("all");
+  const labels: Record<string, string> = {
+    all: t.kinds.all,
+    house: t.kinds.house,
+    apartment: t.kinds.apartment,
+    plot: t.kinds.plot,
+    villa: t.kinds.villa,
+  };
   const [rowWidth, setRowWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
   const overflow = contentWidth > rowWidth + 1;
@@ -460,7 +470,7 @@ function CategoryRow() {
       {CATEGORIES.map((item) => (
         <CategoryChip
           key={item.id}
-          label={item.label}
+          label={labels[item.id] || item.label}
           icon={item.icon}
           active={selected === item.id}
           onPress={() => setSelected(item.id)}
@@ -532,7 +542,11 @@ function FindVisual({ label }: { label: string }) {
 }
 
 function DiscoverVisual({ label }: { label: string }) {
+  const { t } = useI18n();
   const frame = useOnboardingFrame();
+  const previews = PREVIEWS.map((item) => item.id === "villa"
+    ? { ...item, title: t.onboarding.villaTitle, area: t.onboarding.villaArea }
+    : { ...item, title: t.onboarding.apartmentTitle, area: t.onboarding.apartmentArea });
   return (
     <View style={styles.visual}>
       <HeroImage source={exploreHero} label={label} pixelWidth={472} pixelHeight={1024} focus={0.58} align={0.32} />
@@ -540,7 +554,7 @@ function DiscoverVisual({ label }: { label: string }) {
         pointerEvents="box-none"
         style={[styles.visualOverlay, { paddingHorizontal: frame.padH, paddingBottom: frame.tight ? 8 : 12, gap: frame.tight ? 8 : 10 }]}
       >
-        {PREVIEWS.map((item) => (
+        {previews.map((item) => (
           <PropertyPreviewCard key={item.id} {...item} />
         ))}
       </View>
@@ -557,7 +571,9 @@ function DealVisual({ label }: { label: string }) {
 }
 
 function OnboardingPage({ slide, width, height }: { slide: Slide; width: number; height: number }) {
+  const { t } = useI18n();
   const frame = useOnboardingFrame();
+  const featureLabels: Record<string, string> = { buy: t.home.buy, rent: t.home.rent, sell: t.tabs.sell };
   const insets = useSafeAreaInsets();
   return (
     <View style={{ width, height, paddingTop: insets.top + frame.topGap, backgroundColor: palette.background }}>
@@ -606,7 +622,7 @@ function OnboardingPage({ slide, width, height }: { slide: Slide; width: number;
       {slide.kind === "actions" ? (
         <View style={{ paddingHorizontal: frame.padH, marginTop: frame.blockGap, flexDirection: "row", gap: frame.tight ? 8 : 12 }}>
           {FEATURES.map((item) => (
-            <FeatureOptionCard key={item.id} label={item.label} icon={item.icon} color={item.color} />
+            <FeatureOptionCard key={item.id} label={featureLabels[item.id] || item.label} icon={item.icon} color={item.color} />
           ))}
         </View>
       ) : null}
@@ -621,6 +637,12 @@ function OnboardingPage({ slide, width, height }: { slide: Slide; width: number;
 }
 
 export function OnboardingScreen({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+  const { t } = useI18n();
+  const slides = useMemo(() => SLIDES.map((slide) => {
+    if (slide.id === "find") return { ...slide, titleLead: t.onboarding.findLead, titleAccent: t.onboarding.findAccent, subtitle: t.onboarding.findSubtitle, imageLabel: t.onboarding.findImage };
+    if (slide.id === "explore") return { ...slide, titleLead: t.onboarding.exploreLead, titleAccent: t.onboarding.exploreAccent, subtitle: t.onboarding.exploreSubtitle, imageLabel: t.onboarding.exploreImage };
+    return { ...slide, titleLead: t.onboarding.dealLead, titleAccent: t.onboarding.dealAccent, subtitle: t.onboarding.dealSubtitle, imageLabel: t.onboarding.dealImage };
+  }), [t]);
   const insets = useSafeAreaInsets();
   const frame = useOnboardingFrame();
   const listRef = useRef<FlatList<Slide>>(null);
@@ -638,13 +660,13 @@ export function OnboardingScreen({ onNext, onSkip }: { onNext: () => void; onSki
 
   function sync(offsetX: number) {
     if (viewport.width <= 0) return;
-    const next = Math.max(0, Math.min(SLIDES.length - 1, Math.round(offsetX / viewport.width)));
+    const next = Math.max(0, Math.min(slides.length - 1, Math.round(offsetX / viewport.width)));
     setIndex((current) => (current === next ? current : next));
   }
 
   function goTo(next: number) {
     if (viewport.width <= 0) return;
-    const clamped = Math.max(0, Math.min(SLIDES.length - 1, next));
+    const clamped = Math.max(0, Math.min(slides.length - 1, next));
     setIndex(clamped);
     listRef.current?.scrollToOffset({ offset: clamped * viewport.width, animated: true });
   }
@@ -666,7 +688,7 @@ export function OnboardingScreen({ onNext, onSkip }: { onNext: () => void; onSki
         {viewport.width > 0 && viewport.height > 0 ? (
           <FlatList
             ref={listRef}
-            data={SLIDES}
+            data={slides}
             keyExtractor={(item) => item.id}
             horizontal
             pagingEnabled
@@ -675,7 +697,7 @@ export function OnboardingScreen({ onNext, onSkip }: { onNext: () => void; onSki
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
             scrollEventThrottle={16}
-            initialNumToRender={SLIDES.length}
+            initialNumToRender={slides.length}
             windowSize={3}
             getItemLayout={(_, itemIndex) => ({
               length: viewport.width,
@@ -689,12 +711,12 @@ export function OnboardingScreen({ onNext, onSkip }: { onNext: () => void; onSki
         ) : null}
       </View>
       <View style={[styles.footer, { paddingHorizontal: frame.padH, paddingBottom: Math.max(insets.bottom + 8, 14) }]}>
-        <OnboardingPagination count={SLIDES.length} index={index} onSelect={goTo} />
+        <OnboardingPagination count={slides.length} index={index} onSelect={goTo} />
         <View style={{ height: frame.tight ? 10 : 14 }} />
         <OnboardingButton
-          label={last ? "Get Started →" : "Next →"}
+          label={last ? t.onboarding.getStarted : t.onboarding.next}
           variant="primary"
-          accessibilityLabel={last ? "Get started" : "Next"}
+          accessibilityLabel={last ? t.onboarding.getStarted : t.onboarding.next}
           onPress={() => {
             if (last) {
               finish(onNext);
@@ -705,9 +727,9 @@ export function OnboardingScreen({ onNext, onSkip }: { onNext: () => void; onSki
         />
         <View style={{ height: frame.tight ? 8 : 10 }} />
         <OnboardingButton
-          label="Skip"
+          label={t.common.skip}
           variant="secondary"
-          accessibilityLabel="Skip"
+          accessibilityLabel={t.common.skip}
           onPress={() => finish(onSkip)}
         />
       </View>

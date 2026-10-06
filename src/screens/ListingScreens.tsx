@@ -9,6 +9,10 @@ import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput, useKeybo
 import { PageHeader, SkeletonBlock, styles } from "../components/ui";
 import { useRazorpay } from "../components/RazorpayCheckout";
 import { useAuth } from "../context/AuthContext";
+import { useI18n } from "../i18n";
+import { getCopy, getLocale } from "../i18n/active";
+import { fill } from "../i18n/format";
+import { amenityName, featureName, furnishingName, kindName, possessionName } from "../i18n/labels";
 import { api, inr, listingPrice, upgradeCharge, uploadMedia } from "../lib/api";
 import { readCurrentPlace } from "../lib/location";
 import { buttonShadow, colors } from "../theme";
@@ -63,10 +67,11 @@ const listingPlans = [
 ];
 
 function planDetail(id: "standard" | "premium") {
+  const text = getCopy().listing;
   const month = listingPrice(id, "month");
   const year = listingPrice(id, "year");
-  const priceText = `₹${month} for 1 month, or ₹${year} for 1 year after 15% off.`;
-  return id === "premium" ? `${priceText} Shows first on the home page.` : priceText;
+  const priceText = fill(text.planPrice, { month, year });
+  return id === "premium" ? `${priceText}${text.premiumFirst}` : priceText;
 }
 
 function listingNeedsPayment(
@@ -100,6 +105,7 @@ const green = colors.primary;
 const page = colors.page;
 
 export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone: () => void }) {
+  const { t } = useI18n();
   const auth = useAuth();
   const pay = useRazorpay();
   const navigation = useNavigation();
@@ -193,17 +199,17 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       setSavedTerm(term);
       setListingStatus(item.status || "");
       setExpiresAt(item.expires_at ?? null);
-    }).catch((err) => setError(err instanceof Error ? err.message : "Could not open this property")).finally(() => setOpening(false));
+    }).catch((err) => setError(err instanceof Error ? err.message : t.listing.openFailed)).finally(() => setOpening(false));
   }, [propertyId, auth.token]);
 
   async function pickPhoto() {
     if (!auth.token) {
-      setError("Sign in before uploading photos.");
+      setError(t.listing.signInPhotos);
       return;
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError("Photo permission is required.");
+      setError(t.listing.photoPermission);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7, allowsMultipleSelection: true });
@@ -213,7 +219,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       const urls = await Promise.all(result.assets.map((asset) => uploadMedia(asset.uri, auth.token!, "image", asset.fileName, asset.mimeType)));
       setImages((current) => [...current, ...urls]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : t.listing.uploadFailed);
     } finally {
       setBusy(false);
     }
@@ -221,12 +227,12 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
 
   async function pickVideo() {
     if (!auth.token) {
-      setError("Sign in before uploading a video.");
+      setError(t.listing.signInVideo);
       return;
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError("Photo permission is required.");
+      setError(t.listing.photoPermission);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["videos"], videoMaxDuration: 60 });
@@ -237,7 +243,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       const url = await uploadMedia(asset.uri, auth.token, "video", asset.fileName, asset.mimeType);
       setVideo(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : t.listing.uploadFailed);
     } finally {
       setBusy(false);
     }
@@ -245,7 +251,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
 
   async function pickDocument(type: string) {
     if (!auth.token) {
-      setError("Sign in before uploading documents.");
+      setError(t.listing.signInDocs);
       return;
     }
     const result = await DocumentPicker.getDocumentAsync({ type: ["image/*", "application/pdf"], copyToCacheDirectory: true, multiple: false });
@@ -256,7 +262,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       const url = await uploadMedia(asset.uri, auth.token, "document", asset.name, asset.mimeType);
       setDocs((current) => ({ ...current, [type]: url }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : t.listing.uploadFailed);
     } finally {
       setBusy(false);
     }
@@ -283,7 +289,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       setLatitude(place.latitude);
       setLongitude(place.longitude);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not read your location.");
+      setError(err instanceof Error ? err.message : t.listing.locationFailed);
     } finally {
       setLocating(false);
     }
@@ -291,21 +297,21 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
 
   async function publish() {
     if (!auth.token) {
-      setError("Sign in to publish a property.");
+      setError(t.listing.signInPublish);
       return;
     }
     if (title.trim().length < 3) {
-      setError("Add a title of at least 3 characters.");
+      setError(t.listing.titleShort);
       setStep(3);
       return;
     }
     if (images.length < 2) {
-      setError("Add at least 2 photos.");
+      setError(t.listing.needPhotos);
       setStep(4);
       return;
     }
     if (year && (Number(year) < 1800 || Number(year) > 2200)) {
-      setError("Enter a construction year between 1800 and 2200.");
+      setError(t.listing.yearInvalid);
       setStep(3);
       return;
     }
@@ -397,7 +403,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       }
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not publish");
+      setError(err instanceof Error ? err.message : t.listing.publishFailed);
     } finally {
       setBusy(false);
     }
@@ -405,11 +411,11 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
 
   function next() {
     if (step === 3 && title.trim().length < 3) {
-      setError("Add a title of at least 3 characters.");
+      setError(t.listing.titleShort);
       return;
     }
     if (step === 4 && images.length < 2) {
-      setError("Add at least 2 photos before continuing.");
+      setError(t.listing.needPhotosNext);
       return;
     }
     setError("");
@@ -435,7 +441,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   if (opening) {
     return (
       <View style={{ flex: 1, backgroundColor: page }}>
-        <PageHeader title={propertyId ? "Edit Property" : "List a Property"} onBack={leave} right={closeButton} />
+        <PageHeader title={propertyId ? t.listing.edit : t.listing.create} onBack={leave} right={closeButton} />
         <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 16, gap: 12 }}>
           <SkeletonBlock height={8} radius={4} />
           <SkeletonBlock height={28} width="46%" radius={8} />
@@ -456,7 +462,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
 
   return (
     <KeyboardScreen style={{ backgroundColor: page }}>
-      <PageHeader title={propertyId ? "Edit Property" : "List a Property"} onBack={leave} right={closeButton} />
+      <PageHeader title={propertyId ? t.listing.edit : t.listing.create} onBack={leave} right={closeButton} />
       <KeyboardFormScroll style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: green, alignItems: "center", justifyContent: "center" }}>
@@ -469,7 +475,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
         {step === 0 && (
           <View>
-            <Text style={{ fontSize: 22, fontWeight: "800", textAlign: "center", marginVertical: 18, color: colors.ink }}>What are you listing?</Text>
+            <Text style={{ fontSize: 22, fontWeight: "800", textAlign: "center", marginVertical: 18, color: colors.ink }}>{t.listing.what}</Text>
             <View style={{ gap: 12 }}>
               {[0, 1, 2].map((row) => (
                 <View key={row} style={{ flexDirection: "row", gap: 10 }}>
@@ -480,7 +486,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
                         <View style={{ width: "100%", aspectRatio: 1.15, borderRadius: 14, overflow: "hidden", borderWidth: selected ? 2 : 0, borderColor: green }}>
                           <Image source={item.image} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
                         </View>
-                        <Text numberOfLines={2} style={{ textAlign: "center", marginTop: 6, minHeight: 36, fontWeight: "600", color: colors.ink, fontSize: 13 }}>{item.label}</Text>
+                        <Text numberOfLines={2} style={{ textAlign: "center", marginTop: 6, minHeight: 36, fontWeight: "600", color: colors.ink, fontSize: 13 }}>{kindName(item.slug)}</Text>
                       </Pressable>
                     );
                   })}
@@ -491,7 +497,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         )}
         {step === 1 && (
           <View>
-            <Text style={heading}>Listing Type</Text>
+            <Text style={heading}>{t.listing.type}</Text>
             {listings.map((item) => {
               const selected = listingType === item.id;
               return (
@@ -500,8 +506,8 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
                     <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: selected ? green : item.color }} />
                   </View>
                   <View>
-                    <Text style={{ fontWeight: "800", color: colors.ink }}>{item.title}</Text>
-                    <Text style={{ color: "#8a918c", marginTop: 2 }}>{item.detail}</Text>
+                    <Text style={{ fontWeight: "800", color: colors.ink }}>{item.id === "sale" ? t.listing.sell : item.id === "rent" ? t.listing.rent : item.id === "lease" ? t.listing.lease : t.listing.pg}</Text>
+                    <Text style={{ color: "#8a918c", marginTop: 2 }}>{item.id === "sale" ? t.listing.sellDetail : item.id === "rent" ? t.listing.rentDetail : item.id === "lease" ? t.listing.leaseDetail : t.listing.pgDetail}</Text>
                   </View>
                 </Pressable>
               );
@@ -510,18 +516,18 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         )}
         {step === 2 && (
           <View>
-            <Text style={heading}>Property Location</Text>
+            <Text style={heading}>{t.listing.location}</Text>
             <Pressable onPress={useCurrentLocation} disabled={locating} style={{ backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", marginBottom: 16, opacity: locating ? 0.6 : 1 }}>
-              <Text style={{ color: colors.primary, fontWeight: "700" }}>{locating ? "Finding your location..." : "Use Current Location"}</Text>
+              <Text style={{ color: colors.primary, fontWeight: "700" }}>{locating ? t.listing.finding : t.listing.useLocation}</Text>
             </Pressable>
-            <Label text="Address" />
-            <Input value={address} onChangeText={setAddress} placeholder="Enter full address" />
-            <Label text="City" />
+            <Label text={t.listing.address} />
+            <Input value={address} onChangeText={setAddress} placeholder={t.listing.addressPlaceholder} />
+            <Label text={t.listing.city} />
             <Input value={city} onChangeText={setCity} placeholder="Rajkot" />
-            <Label text="Area / Locality" />
-            <Input value={locality} onChangeText={setLocality} placeholder="Enter area" />
-            <Label text="Pincode" />
-            <Input value={pincode} onChangeText={setPincode} placeholder="Enter pincode" keyboardType="number-pad" />
+            <Label text={t.listing.area} />
+            <Input value={locality} onChangeText={setLocality} placeholder={t.listing.areaPlaceholder} />
+            <Label text={t.listing.pincode} />
+            <Input value={pincode} onChangeText={setPincode} placeholder={t.listing.pincodePlaceholder} keyboardType="number-pad" />
             <View style={{ height: 110, borderRadius: 14, backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center", marginTop: 8 }}>
               <Ionicons name="location" size={28} color={colors.heart} />
             </View>
@@ -529,48 +535,48 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         )}
         {step === 3 && (
           <View>
-            <Text style={heading}>Property Details</Text>
-            <Label text="Title" />
-            <Input value={title} onChangeText={setTitle} placeholder="e.g., 3 BHK House" />
-            <Label text="Description" />
-            <TextInput value={description} onChangeText={setDescription} onFocus={requestScrollFocusedInput} placeholder="Write property details..." placeholderTextColor="#b0b6b1" multiline style={[box, { minHeight: 90, textAlignVertical: "top" }]} />
+            <Text style={heading}>{t.listing.details}</Text>
+            <Label text={t.listing.title} />
+            <Input value={title} onChangeText={setTitle} placeholder={t.listing.titlePlaceholder} />
+            <Label text={t.listing.description} />
+            <TextInput value={description} onChangeText={setDescription} onFocus={requestScrollFocusedInput} placeholder={t.listing.descriptionPlaceholder} placeholderTextColor="#b0b6b1" multiline style={[box, { minHeight: 90, textAlignVertical: "top" }]} />
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
-                <Label text="Bedrooms" />
+                <Label text={t.listing.bedrooms} />
                 <Input value={bedrooms} onChangeText={(value) => setBedrooms(value.replace(/\D/g, "").slice(0, 2))} placeholder="3" keyboardType="number-pad" />
               </View>
               <View style={{ flex: 1 }}>
-                <Label text="Bathrooms" />
+                <Label text={t.listing.bathrooms} />
                 <Input value={bathrooms} onChangeText={(value) => setBathrooms(value.replace(/\D/g, "").slice(0, 2))} placeholder="2" keyboardType="number-pad" />
               </View>
               <View style={{ flex: 1 }}>
-                <Label text="Balconies" />
+                <Label text={t.listing.balconies} />
                 <Input value={balconies} onChangeText={(value) => setBalconies(value.replace(/\D/g, "").slice(0, 2))} placeholder="1" keyboardType="number-pad" />
               </View>
             </View>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
-                <Label text="Built-up Area (sq.ft)" />
-                <Input value={area} onChangeText={setArea} placeholder="Enter area" keyboardType="number-pad" />
+                <Label text={t.listing.builtUp} />
+                <Input value={area} onChangeText={setArea} placeholder={t.listing.areaValuePlaceholder} keyboardType="number-pad" />
               </View>
-              <Choice label="Furnishing" value={furnishing} placeholder="Select" options={["furnished", "semi_furnished", "unfurnished"]} onChange={setFurnishing} />
+              <Choice label={t.listing.furnishing} value={furnishing} placeholder={t.listing.select} options={["furnished", "semi_furnished", "unfurnished"]} format={furnishingName} onChange={setFurnishing} />
             </View>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
-                <Label text="Construction Year" />
+                <Label text={t.listing.year} />
                 <Input value={year} onChangeText={(value) => setYear(value.replace(/\D/g, "").slice(0, 4))} placeholder="2024" keyboardType="number-pad" />
               </View>
-              <Choice label="Possession" value={possession} placeholder="Select" options={["Ready to move", "Under construction"]} onChange={setPossession} />
+              <Choice label={t.listing.possession} value={possession} placeholder={t.listing.select} options={["Ready to move", "Under construction"]} format={possessionName} onChange={setPossession} />
             </View>
           </View>
         )}
         {step === 4 && (
           <View>
-            <Text style={heading}>Photos & Videos</Text>
+            <Text style={heading}>{t.listing.media}</Text>
             <Pressable onPress={pickPhoto} style={{ borderWidth: 1, borderStyle: "dashed", borderColor: "#d9d4ca", borderRadius: 14, paddingVertical: 22, alignItems: "center", backgroundColor: "white" }}>
               <Ionicons name="cloud-upload-outline" size={22} color="#6e766f" />
-              <Text style={{ fontWeight: "800", marginTop: 6 }}>Upload Photos</Text>
-              <Text style={{ color: "#8a918c", marginTop: 2 }}>At least 2 photos are required</Text>
+              <Text style={{ fontWeight: "800", marginTop: 6 }}>{t.listing.uploadPhotos}</Text>
+              <Text style={{ color: "#8a918c", marginTop: 2 }}>{t.listing.photosRequired}</Text>
             </Pressable>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
               {images.map((uri) => <Image key={uri} source={{ uri }} style={{ width: 96, height: 78, borderRadius: 12 }} />)}
@@ -578,41 +584,41 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
                 <Text style={{ fontSize: 28, color: "#9aa19c" }}>+</Text>
               </Pressable>
             </View>
-            <Text style={{ fontWeight: "800", marginTop: 18, marginBottom: 8 }}>Upload Video (Optional)</Text>
+            <Text style={{ fontWeight: "800", marginTop: 18, marginBottom: 8 }}>{t.listing.uploadVideo}</Text>
             <Pressable onPress={pickVideo} style={{ borderWidth: 1, borderStyle: "dashed", borderColor: "#d9d4ca", borderRadius: 14, height: 90, alignItems: "center", justifyContent: "center", backgroundColor: "white" }}>
               <Ionicons name="play-circle-outline" size={26} color={video ? green : "#b0b6b1"} />
-              <Text style={{ color: video ? green : "#8a918c", marginTop: 4, fontWeight: "700" }}>{video ? "Video added" : "Add a short video"}</Text>
+              <Text style={{ color: video ? green : "#8a918c", marginTop: 4, fontWeight: "700" }}>{video ? t.listing.videoAdded : t.listing.addVideo}</Text>
             </Pressable>
           </View>
         )}
         {step === 5 && (
           <View>
-            <Text style={heading}>Pricing Details</Text>
-            <Label text="Price" />
-            <Input value={price} onChangeText={setPrice} placeholder="Enter price" keyboardType="number-pad" />
-            <Label text="Price Unit" />
+            <Text style={heading}>{t.listing.pricing}</Text>
+            <Label text={t.listing.price} />
+            <Input value={price} onChangeText={setPrice} placeholder={t.listing.pricePlaceholder} keyboardType="number-pad" />
+            <Label text={t.listing.priceUnit} />
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
               <Pressable onPress={() => setPriceUnit("total")} style={{ flex: 1, backgroundColor: priceUnit === "total" ? green : colors.card, borderRadius: 14, borderWidth: 1, borderColor: priceUnit === "total" ? green : colors.line, height: 52, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: priceUnit === "total" ? colors.white : colors.muted, fontWeight: "700" }}>Total</Text>
+                <Text style={{ color: priceUnit === "total" ? colors.white : colors.muted, fontWeight: "700" }}>{t.listing.total}</Text>
               </Pressable>
               <Pressable onPress={() => setPriceUnit("per_sqft")} style={{ flex: 1, backgroundColor: priceUnit === "per_sqft" ? green : colors.card, borderRadius: 14, borderWidth: 1, borderColor: priceUnit === "per_sqft" ? green : colors.line, height: 52, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: priceUnit === "per_sqft" ? colors.white : colors.muted, fontWeight: "700" }}>Per Sq.ft</Text>
+                <Text style={{ color: priceUnit === "per_sqft" ? colors.white : colors.muted, fontWeight: "700" }}>{t.listing.perSqft}</Text>
               </Pressable>
             </View>
             <Pressable onPress={() => setNegotiable((value) => !value)} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <Ionicons name={negotiable ? "checkbox" : "square-outline"} size={22} color={negotiable ? colors.primary : colors.faint} />
-              <Text style={{ fontWeight: "700" }}>Negotiable</Text>
+              <Text style={{ fontWeight: "700" }}>{t.listing.negotiable}</Text>
             </Pressable>
-            <Label text="Maintenance Charges (if any)" />
-            <Input value={maintenance} onChangeText={setMaintenance} placeholder="Enter amount" keyboardType="number-pad" />
-            <Label text="Security Deposit (for rent)" />
-            <Input value={deposit} onChangeText={setDeposit} placeholder="Enter amount" keyboardType="number-pad" />
-            <Label text="Listing plan" />
-            <Text style={{ color: "#8a918c", marginBottom: 10 }}>{propertyId ? "The plan and period were chosen when this listing was created. They stay as they are while you edit." : `The fee is taken from your wallet. Wallet balance: ${walletBalance == null ? "..." : inr(walletBalance)}. A year is 15% less than paying every month. If this listing is already paid, that amount comes off the new price. A paid month counts as the first month of the year.`}</Text>
+            <Label text={t.listing.maintenance} />
+            <Input value={maintenance} onChangeText={setMaintenance} placeholder={t.listing.amountPlaceholder} keyboardType="number-pad" />
+            <Label text={t.listing.deposit} />
+            <Input value={deposit} onChangeText={setDeposit} placeholder={t.listing.amountPlaceholder} keyboardType="number-pad" />
+            <Label text={t.listing.plan} />
+            <Text style={{ color: "#8a918c", marginBottom: 10 }}>{propertyId ? t.listing.planLocked : fill(t.listing.planHint, { balance: walletBalance == null ? "..." : inr(walletBalance) })}</Text>
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, opacity: propertyId ? 0.55 : 1 }} pointerEvents={propertyId ? "none" : "auto"}>
               {(["month", "year"] as const).map((option) => (
                 <Pressable key={option} disabled={Boolean(propertyId)} onPress={() => setListingTerm(option)} style={{ flex: 1, backgroundColor: listingTerm === option ? green : colors.card, borderRadius: 14, borderWidth: 1, borderColor: listingTerm === option ? green : colors.line, minHeight: 52, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 }}>
-                  <Text style={{ color: listingTerm === option ? colors.white : colors.muted, fontWeight: "700", textAlign: "center" }}>{option === "month" ? "1 month" : "1 year · 15% off"}</Text>
+                  <Text style={{ color: listingTerm === option ? colors.white : colors.muted, fontWeight: "700", textAlign: "center" }}>{option === "month" ? t.listing.oneMonth : t.listing.oneYear}</Text>
                 </Pressable>
               ))}
             </View>
@@ -626,10 +632,10 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
                 <Pressable key={plan.id} disabled={Boolean(propertyId)} onPress={() => setListingBadge(plan.id)} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: selected ? colors.primarySoft : colors.card, borderRadius: 14, borderWidth: 1, borderColor: selected ? green : colors.line, padding: 14, marginBottom: 10 }}>
                   <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={22} color={selected ? green : "#c5c5c5"} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: "800", color: colors.ink }}>{plan.title}</Text>
+                    <Text style={{ fontWeight: "800", color: colors.ink }}>{plan.id === "premium" ? t.common.premium : t.listing.regular}</Text>
                     <Text style={{ color: "#8a918c", marginTop: 2 }}>{planDetail(plan.id)}</Text>
                   </View>
-                  {credited ? <Text style={{ color: "#8a918c", fontWeight: "700" }}>{inr(priceNow)} now</Text> : plan.tag ? <View style={{ backgroundColor: "#f8e7c0", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ color: "#8a5a12", fontWeight: "800", fontSize: 12 }}>{plan.tag}</Text></View> : <Text style={{ color: "#8a918c", fontWeight: "700" }}>{inr(full)}</Text>}
+                  {credited ? <Text style={{ color: "#8a918c", fontWeight: "700" }}>{fill(t.listing.priceNow, { amount: inr(priceNow) })}</Text> : plan.tag ? <View style={{ backgroundColor: "#f8e7c0", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ color: "#8a5a12", fontWeight: "800", fontSize: 12 }}>{t.common.premium}</Text></View> : <Text style={{ color: "#8a918c", fontWeight: "700" }}>{inr(full)}</Text>}
                 </Pressable>
               );
             })}
@@ -638,27 +644,27 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         )}
         {step === 6 && (
           <View>
-            <Text style={heading}>Amenities & Features</Text>
+            <Text style={heading}>{t.listing.amenities}</Text>
             <View style={{ backgroundColor: "white", borderRadius: 16, padding: 14 }}>
-              <Text style={{ fontWeight: "800", marginBottom: 10 }}>Amenities</Text>
+              <Text style={{ fontWeight: "800", marginBottom: 10 }}>{t.listing.amenitiesTitle}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                 {amenityChoices.map((item) => {
                   const checked = pickedAmenitySlugs.includes(item.slug);
                   return (
                     <Pressable key={item.slug} onPress={() => toggleAmenity(item.slug)} style={{ width: "50%", flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
                       <Ionicons name={checked ? "checkbox" : "square-outline"} size={20} color={checked ? green : "#c5c5c5"} />
-                      <Text>{item.label}</Text>
+                      <Text>{amenityName(item.slug, item.label)}</Text>
                     </Pressable>
                   );
                 })}
               </View>
-              <Text style={{ fontWeight: "800", marginBottom: 10 }}>Additional Features</Text>
+              <Text style={{ fontWeight: "800", marginBottom: 10 }}>{t.listing.features}</Text>
               {featureChoices.map((label) => {
                 const checked = pickedFeatures.includes(label);
                 return (
                   <Pressable key={label} onPress={() => setPickedFeatures((current) => checked ? current.filter((item) => item !== label) : [...current, label])} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
                     <Ionicons name={checked ? "checkbox" : "square-outline"} size={20} color={checked ? green : "#c5c5c5"} />
-                    <Text>{label}</Text>
+                    <Text>{featureName(label)}</Text>
                   </Pressable>
                 );
               })}
@@ -667,13 +673,13 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         )}
         {step === 7 && (
           <View>
-            <Text style={heading}>Documents (Optional)</Text>
+            <Text style={heading}>{t.listing.documents}</Text>
             {documents.map((item) => (
               <View key={item.type} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "white", borderRadius: 12, padding: 12, marginBottom: 10 }}>
                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
                   <Ionicons name="document-text-outline" size={18} color={colors.primary} />
                 </View>
-                <Text style={{ flex: 1, marginLeft: 10, fontWeight: "600", color: colors.ink }}>{docs[item.type] ? `${item.label} added` : item.label}</Text>
+                <Text style={{ flex: 1, marginLeft: 10, fontWeight: "600", color: colors.ink }}>{docs[item.type] ? fill(t.listing.docAdded, { name: item.type === "sale_deed" ? t.listing.saleDeed : item.type === "7_12" ? t.listing.extract : item.type === "property_card" ? t.listing.propertyCard : item.type === "tax_receipt" ? t.listing.taxReceipt : item.type === "rera_certificate" ? t.listing.rera : t.listing.otherDoc }) : item.type === "sale_deed" ? t.listing.saleDeed : item.type === "7_12" ? t.listing.extract : item.type === "property_card" ? t.listing.propertyCard : item.type === "tax_receipt" ? t.listing.taxReceipt : item.type === "rera_certificate" ? t.listing.rera : t.listing.otherDoc}</Text>
                 <Pressable onPress={() => pickDocument(item.type)}>
                   <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
                 </Pressable>
@@ -684,10 +690,10 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       </KeyboardFormScroll>
       <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingTop: 10, paddingBottom: keyboardOverlap > 0 ? 10 : Math.max(insets.bottom, 12), backgroundColor: page }}>
         <Pressable onPress={leave} style={{ flex: 1, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", backgroundColor: colors.card }}>
-          <Text style={{ fontWeight: "700", color: colors.primary }}>{step === 0 ? "Cancel" : "Back"}</Text>
+          <Text style={{ fontWeight: "700", color: colors.primary }}>{step === 0 ? t.common.cancel : t.common.back}</Text>
         </Pressable>
         <Pressable onPress={next} disabled={busy} style={({ pressed }) => ({ flex: 1, backgroundColor: pressed ? colors.primaryDark : green, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
-          <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? "Please wait..." : step === 7 ? (listingNeedsPayment(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) && amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) > 0 ? `Use ₹${amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm)} from wallet` : "Save") : "Next"}</Text>
+          <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? t.common.pleaseWait : step === 7 ? (listingNeedsPayment(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) && amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) > 0 ? fill(t.listing.useWallet, { amount: amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) }) : t.common.save) : t.common.next}</Text>
         </Pressable>
       </View>
     </KeyboardScreen>
@@ -706,18 +712,18 @@ function Input({ value, onChangeText, placeholder, keyboardType }: { value: stri
   return <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.faint} keyboardType={keyboardType} onFocus={() => { setFocused(true); requestScrollFocusedInput(); }} onBlur={() => setFocused(false)} style={[box, focused && { borderColor: colors.primary }]} />;
 }
 
-function Choice({ label, value, placeholder, options, onChange }: { label: string; value: string; placeholder?: string; options: string[]; onChange: (value: string) => void }) {
+function Choice({ label, value, placeholder, options, format, onChange }: { label: string; value: string; placeholder?: string; options: string[]; format?: (value: string) => string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <View style={{ flex: 1 }}>
       <Label text={label} />
       <Pressable onPress={() => setOpen((current) => !current)} style={[box, { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: open ? 4 : 12 }]}>
-        <Text style={{ color: value ? colors.ink : colors.faint }}>{value ? value.replaceAll("_", " ") : placeholder || "Select"}</Text>
+        <Text style={{ color: value ? colors.ink : colors.faint }}>{value ? (format ? format(value) : value.replaceAll("_", " ")) : placeholder || getCopy().listing.select}</Text>
         <Ionicons name="chevron-down" size={16} color={colors.faint} />
       </Pressable>
       {open ? options.map((option) => (
         <Pressable key={option} onPress={() => { onChange(option); setOpen(false); }} style={{ paddingVertical: 8, paddingHorizontal: 8 }}>
-          <Text>{option.replaceAll("_", " ")}</Text>
+          <Text>{format ? format(option) : option.replaceAll("_", " ")}</Text>
         </Pressable>
       )) : null}
     </View>
@@ -725,8 +731,6 @@ function Choice({ label, value, placeholder, options, onChange }: { label: strin
 }
 
 const visitTimes = ["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "04:00 PM", "06:00 PM"];
-const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function upcomingDates() {
   return Array.from({ length: 14 }, (_, index) => {
@@ -738,6 +742,7 @@ function upcomingDates() {
 }
 
 export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void }) {
+  const { t } = useI18n();
   const { token } = useAuth();
   const dates = upcomingDates();
   const [item, setItem] = useState<PropertyDetail | null>(null);
@@ -763,12 +768,12 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
 
   async function submit() {
     if (!token) {
-      setError("Sign in to request a visit.");
+      setError(t.listing.signInVisit);
       return;
     }
     const parsed = selectedDate();
     if (!parsed || Number.isNaN(parsed.getTime())) {
-      setError("Choose a valid date and time.");
+      setError(t.listing.badDate);
       return;
     }
     setBusy(true);
@@ -777,7 +782,7 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
       await api.visit(id, { scheduled_at: parsed.toISOString(), notes }, token);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not schedule");
+      setError(err instanceof Error ? err.message : t.listing.scheduleFailed);
     } finally {
       setBusy(false);
     }
@@ -786,7 +791,7 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
   const place = [item?.locality, item?.city].filter(Boolean).join(", ");
   return (
     <KeyboardScreen style={{ backgroundColor: colors.page }}>
-      <PageHeader title="Schedule a visit" subtitle="Pick a day and time that works for you" />
+      <PageHeader title={t.listing.scheduleTitle} subtitle={t.listing.scheduleSubtitle} />
       <KeyboardFormScroll style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 12, flexDirection: "row", gap: 12, alignItems: "center" }}>
           <View style={{ width: 88, height: 88, borderRadius: 16, overflow: "hidden", backgroundColor: colors.secondary }}>
@@ -797,7 +802,7 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
             )}
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontWeight: "800", fontSize: 16, color: colors.ink }} numberOfLines={2}>{item?.title || "Property"}</Text>
+            <Text style={{ fontWeight: "800", fontSize: 16, color: colors.ink }} numberOfLines={2}>{item?.title || t.common.property}</Text>
             {place ? <Text style={{ color: colors.muted, marginTop: 4 }} numberOfLines={1}>{place}</Text> : null}
             <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 16, marginTop: 6 }}>{inr(item?.price)}</Text>
           </View>
@@ -809,9 +814,9 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
             const active = option.getTime() === date.getTime();
             return (
               <Pressable key={option.toISOString()} onPress={() => setDate(option)} style={{ width: 68, borderRadius: 16, paddingVertical: 12, alignItems: "center", backgroundColor: active ? colors.primary : colors.card, borderWidth: 1, borderColor: active ? colors.primary : colors.line }}>
-                <Text style={{ color: active ? "rgba(255,255,255,0.8)" : colors.muted, fontSize: 12, fontWeight: "700" }}>{weekdays[option.getDay()]}</Text>
+                <Text style={{ color: active ? "rgba(255,255,255,0.8)" : colors.muted, fontSize: 12, fontWeight: "700" }}>{option.toLocaleDateString(getLocale(), { weekday: "short" })}</Text>
                 <Text style={{ color: active ? colors.white : colors.ink, fontSize: 18, fontWeight: "800", marginTop: 2 }}>{option.getDate()}</Text>
-                <Text style={{ color: active ? "rgba(255,255,255,0.8)" : colors.muted, fontSize: 12, fontWeight: "600" }}>{monthNames[option.getMonth()]}</Text>
+                <Text style={{ color: active ? "rgba(255,255,255,0.8)" : colors.muted, fontSize: 12, fontWeight: "600" }}>{option.toLocaleDateString(getLocale(), { month: "short" })}</Text>
               </Pressable>
             );
           })}
@@ -830,10 +835,10 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
         </View>
 
         <Text style={{ color: colors.ink, fontWeight: "800", fontSize: 16, marginTop: 22, marginBottom: 10 }}>Message</Text>
-        <TextInput value={notes} onChangeText={setNotes} onFocus={requestScrollFocusedInput} placeholder="Any specific requirement (optional)" placeholderTextColor={colors.faint} multiline style={{ minHeight: 110, textAlignVertical: "top", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 15 }} />
+        <TextInput value={notes} onChangeText={setNotes} onFocus={requestScrollFocusedInput} placeholder={t.listing.notesPlaceholder} placeholderTextColor={colors.faint} multiline style={{ minHeight: 110, textAlignVertical: "top", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 15 }} />
         {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
         <Pressable onPress={submit} disabled={busy} style={({ pressed }) => ({ marginTop: 22, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
-          <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>{busy ? "Requesting..." : "Request visit"}</Text>
+          <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>{busy ? t.common.requesting : t.listing.requestVisit}</Text>
         </Pressable>
       </KeyboardFormScroll>
     </KeyboardScreen>

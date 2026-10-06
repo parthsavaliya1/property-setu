@@ -1,33 +1,23 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import { Dimensions, Image, Pressable, Text, View } from "react-native";
+import { useI18n } from "../i18n";
+import { kindName } from "../i18n/labels";
 import { inr } from "../lib/api";
 import { cardShadow, colors } from "../theme";
 import type { PropertyCard } from "../types/database";
 import { ListingLabel } from "./ui";
 
-function photoTag(item: PropertyCard) {
-  if (item.listing_label === "Premium" || item.is_premium) return { label: "Premium", bg: "#FFF6DE", color: "#8A5A12" };
+function photoTag(item: PropertyCard, premium: string, fresh: string) {
+  if (item.listing_label === "Premium" || item.is_premium) return { label: premium, bg: "#FFF6DE", color: "#8A5A12" };
   const posted = new Date(item.published_at || item.created_at).getTime();
-  if (!Number.isNaN(posted) && Date.now() - posted < 7 * 24 * 60 * 60 * 1000) return { label: "New", bg: colors.primarySoft, color: colors.warning };
+  if (!Number.isNaN(posted) && Date.now() - posted < 7 * 24 * 60 * 60 * 1000) return { label: fresh, bg: colors.primarySoft, color: colors.warning };
   return null;
 }
 
-const kindLabels: Record<string, string> = {
-  house: "House",
-  apartment: "Apartment",
-  villa: "Villa",
-  shop: "Shop",
-  plot: "Plot",
-  land: "Land",
-  "residential-plot": "Plot",
-  "agricultural-land": "Land",
-};
-
 function kindLabel(item: PropertyCard) {
-  if (item.category_name) return item.category_name;
   const slug = (item.category_slug || item.property_type || "").toLowerCase();
-  return kindLabels[slug] || "";
+  return kindName(slug) || item.category_name || "";
 }
 
 function listHeadline(item: PropertyCard) {
@@ -49,8 +39,9 @@ export function PropertyListCard({
   onPress: () => void;
   onSave?: () => void;
 }) {
-  const place = [item.locality, item.city].filter(Boolean).join(", ") || "Location not added";
-  const tag = photoTag(item);
+  const { t } = useI18n();
+  const place = [item.locality, item.city].filter(Boolean).join(", ") || t.common.locationMissing;
+  const tag = photoTag(item, t.common.premium, t.common.new);
   return (
     <Pressable onPress={onPress} style={{ width: "100%", alignSelf: "stretch", flexDirection: "row", alignItems: "flex-start", backgroundColor: colors.card, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
       <View style={{ width: 96, height: 96, borderRadius: 14, overflow: "hidden", backgroundColor: colors.secondary }}>
@@ -101,8 +92,8 @@ export function propertyGridCardWidth(screenWidth = Dimensions.get("window").wid
   return (screenWidth - 20 * 2 - 12) / 2;
 }
 
-function listingBadge(item: PropertyCard) {
-  if (item.listing_label === "Premium" || item.is_premium) return "Premium";
+function listingBadge(item: PropertyCard, premium: string) {
+  if (item.listing_label === "Premium" || item.is_premium) return premium;
   return null;
 }
 
@@ -123,12 +114,13 @@ export function PropertyGridCard({
   footer?: ReactNode;
   corner?: ReactNode;
 }) {
-  const place = [item.locality, item.city].filter(Boolean).join(", ") || "Location not added";
+  const { t } = useI18n();
+  const place = [item.locality, item.city].filter(Boolean).join(", ") || t.common.locationMissing;
   return (
     <Pressable onPress={onPress} style={{ width, backgroundColor: colors.card, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
       <View style={{ height: 120, width: "100%", backgroundColor: "#E7D9C8" }}>
         {item.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : null}
-        <ListingLabel label={listingBadge(item)} />
+        <ListingLabel label={listingBadge(item, "Premium")} />
         {corner ? (
           <View style={{ position: "absolute", top: 8, right: 8 }}>{corner}</View>
         ) : onSave ? (

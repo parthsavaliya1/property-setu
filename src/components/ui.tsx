@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Dimensions, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { requestScrollFocusedInput } from "./keyboard";
+import { useI18n } from "../i18n";
 import { buttonShadow, cardShadow, colors } from "../theme";
 
 const brandLogo = require("../../assets/center-logo.png");
@@ -155,14 +156,15 @@ export function DetailSkeleton() {
 }
 
 export function EmptyState({ kind }: { kind: "active" | "search" }) {
+  const { t } = useI18n();
   const search = kind === "search";
   return (
     <View style={{ flex: 1, minHeight: 280, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
       <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
         <Ionicons name={search ? "search-outline" : "home-outline"} size={36} color={colors.primary} />
       </View>
-      <Text style={{ marginTop: 16, fontSize: 18, fontWeight: "800", color: colors.ink, textAlign: "center" }}>{search ? "No record found" : "No property active"}</Text>
-      <Text style={{ marginTop: 6, color: colors.muted, textAlign: "center", lineHeight: 20 }}>{search ? "Try another city, area, or filter." : "There are no live listings right now."}</Text>
+      <Text style={{ marginTop: 16, fontSize: 18, fontWeight: "800", color: colors.ink, textAlign: "center" }}>{search ? t.search.emptySearch : t.search.emptyActive}</Text>
+      <Text style={{ marginTop: 6, color: colors.muted, textAlign: "center", lineHeight: 20 }}>{search ? t.search.emptySearchHint : t.search.emptyActiveHint}</Text>
     </View>
   );
 }
@@ -224,19 +226,21 @@ export function PageHeader({ title, subtitle, onBack, right }: { title: string; 
 }
 
 export function ListingLabel({ label }: { label?: string | null }) {
+  const { t } = useI18n();
   if (!label) return null;
   const premium = label === "Premium";
   return (
     <View style={{ position: "absolute", top: 8, left: 8, backgroundColor: premium ? "#f8e7c0" : colors.primarySoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
-      <Text style={{ color: premium ? "#8a5a12" : colors.primary, fontSize: 11, fontWeight: "800" }}>{label}</Text>
+      <Text style={{ color: premium ? "#8a5a12" : colors.primary, fontSize: 11, fontWeight: "800" }}>{premium ? t.common.premium : label}</Text>
     </View>
   );
 }
 
 export function ScreenTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+  const { t } = useI18n();
   return (
     <View style={styles.header}>
-      <Text style={styles.kicker}>Location</Text>
+      <Text style={styles.kicker}>{t.details.location}</Text>
       <Text style={styles.headerTitle}>{title}</Text>
       {subtitle ? <Text style={styles.headerSub}>{subtitle}</Text> : null}
     </View>

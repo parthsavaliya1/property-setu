@@ -5,8 +5,12 @@ import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput } from ".
 import { PropertyGridCard, propertyGridCardWidth, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, EmptyState, Field, ListSkeleton, PageHeader, PropertyGridSkeleton, styles } from "../components/ui";
+import { useLanguagePicker } from "../components/LanguagePicker";
 import { useAuth } from "../context/AuthContext";
 import { useFavorites } from "../context/FavoritesContext";
+import { useI18n } from "../i18n";
+import { getCopy, getLocale } from "../i18n/active";
+import { fill } from "../i18n/format";
 import { api, inr, listingPrice, PROPERTY_PAGE_SIZE } from "../lib/api";
 import { nearScrollEnd, usePagedProperties } from "../lib/paging";
 import { useRazorpay } from "../components/RazorpayCheckout";
@@ -35,16 +39,19 @@ export function MenuScreen({
   onSignIn: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
+  const language = useLanguagePicker();
   const { session, me, signOut } = useAuth();
-  const name = me?.profile?.full_name || "Guest";
+  const name = me?.profile?.full_name || t.common.guest;
   const place = [me?.profile?.city].filter(Boolean).join(", ");
-  const rows: Array<{ label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void }> = [
-    { label: "Favorites", icon: "heart-outline", onPress: onFavorites },
-    { label: "Messages", icon: "chatbubbles-outline", onPress: onChats },
-    { label: "Inquiries", icon: "document-text-outline", onPress: onInquiries },
-    { label: "Scheduled visits", icon: "calendar-outline", onPress: onVisits },
-    { label: "Notifications", icon: "notifications-outline", onPress: onNotifications },
-    { label: "About us", icon: "information-circle-outline", onPress: onAbout },
+  const rows: Array<{ label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; value?: string }> = [
+    { label: t.menu.favorites, icon: "heart-outline", onPress: onFavorites },
+    { label: t.menu.messages, icon: "chatbubbles-outline", onPress: onChats },
+    { label: t.menu.inquiries, icon: "document-text-outline", onPress: onInquiries },
+    { label: t.menu.visits, icon: "calendar-outline", onPress: onVisits },
+    { label: t.menu.notifications, icon: "notifications-outline", onPress: onNotifications },
+    { label: t.menu.about, icon: "information-circle-outline", onPress: onAbout },
+    { label: t.menu.language, icon: "language-outline", onPress: language.openPicker, value: language.nativeName },
   ];
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
@@ -64,7 +71,7 @@ export function MenuScreen({
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text numberOfLines={1} style={{ fontSize: 17, fontWeight: "800", color: colors.ink }}>{name}</Text>
-            <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 13, color: colors.muted }}>{session ? place || "View profile" : "Sign in"}</Text>
+            <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 13, color: colors.muted }}>{session ? place || t.menu.viewProfile : t.common.signIn}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.faint} />
         </Pressable>
@@ -73,15 +80,17 @@ export function MenuScreen({
             <Pressable key={row.label} onPress={row.onPress} style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 16, paddingHorizontal: 16, borderBottomWidth: index === rows.length - 1 ? 0 : 1, borderBottomColor: colors.lineSoft }}>
               <Ionicons name={row.icon} size={22} color={colors.primary} />
               <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: colors.ink }}>{row.label}</Text>
+              {row.value ? <Text style={{ color: colors.muted, fontWeight: "700" }}>{row.value}</Text> : null}
               <Ionicons name="chevron-forward" size={16} color={colors.faint} />
             </Pressable>
           ))}
         </View>
         <Pressable onPress={() => (session ? signOut() : onSignIn())} style={{ marginTop: 16, backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 16, paddingHorizontal: 16 }}>
           <Ionicons name={session ? "log-out-outline" : "log-in-outline"} size={22} color={session ? colors.danger : colors.primary} />
-          <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: session ? colors.danger : colors.primary }}>{session ? "Logout" : "Sign in"}</Text>
+          <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: session ? colors.danger : colors.primary }}>{session ? t.common.logout : t.common.signIn}</Text>
         </Pressable>
       </ScrollView>
+      {language.modal}
     </View>
   );
 }
@@ -90,6 +99,7 @@ const walletAmounts = [20, 30, 100, 204, 306, 500];
 
 export function WalletScreen({ onHistory }: { onHistory: () => void }) {
   const { token, session } = useAuth();
+  const { t } = useI18n();
   const pay = useRazorpay();
   const [balance, setBalance] = useState(0);
   const [amount, setAmount] = useState("100");
@@ -106,7 +116,7 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
     if (!token) return;
     const rupees = value ?? Number(amount);
     if (!Number.isInteger(rupees) || rupees < 1) {
-      setError("Enter a whole amount in rupees.");
+      setError(t.account.wholeAmount);
       return;
     }
     setBusy(true);
@@ -128,9 +138,9 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
         razorpay_signature: paid.razorpay_signature,
       }, token);
       setBalance(result.balance);
-      setNote(`${inr(rupees)} added to your wallet.`);
+      setNote(fill(t.account.added, { amount: inr(rupees) }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add money");
+      setError(err instanceof Error ? err.message : t.account.addFailed);
     } finally {
       setBusy(false);
     }
@@ -138,15 +148,15 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
 
   return (
     <KeyboardScreen style={{ backgroundColor: colors.page }}>
-      <PageHeader title="Wallet" />
+      <PageHeader title={t.account.wallet} />
       <KeyboardFormScroll contentContainerStyle={{ padding: 20, paddingBottom: 28 }}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.line }}>
-          <Text style={{ color: colors.muted, fontWeight: "600" }}>Wallet balance</Text>
+          <Text style={{ color: colors.muted, fontWeight: "600" }}>{t.account.balance}</Text>
           <Text style={{ color: colors.ink, fontSize: 32, fontWeight: "800", marginTop: 6 }}>{inr(balance)}</Text>
-          <Text style={{ color: colors.muted, marginTop: 8 }}>Listing fees are taken from this wallet.</Text>
+          <Text style={{ color: colors.muted, marginTop: 8 }}>{t.account.walletHint}</Text>
         </View>
-        <Text style={{ fontWeight: "800", color: colors.ink, marginTop: 24, marginBottom: 8 }}>Add money</Text>
-        <TextInput value={amount} onChangeText={setAmount} onFocus={requestScrollFocusedInput} keyboardType="number-pad" placeholder="Amount in rupees" placeholderTextColor={colors.faint} style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, height: 52, color: colors.ink }} />
+        <Text style={{ fontWeight: "800", color: colors.ink, marginTop: 24, marginBottom: 8 }}>{t.account.addMoney}</Text>
+        <TextInput value={amount} onChangeText={setAmount} onFocus={requestScrollFocusedInput} keyboardType="number-pad" placeholder={t.account.amountPlaceholder} placeholderTextColor={colors.faint} style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, height: 52, color: colors.ink }} />
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
           {walletAmounts.map((value) => {
             const selected = amount === String(value);
@@ -160,30 +170,32 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
         {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
         {note ? <Text style={{ color: colors.success, fontWeight: "700", marginTop: 12 }}>{note}</Text> : null}
         <Pressable onPress={() => addMoney()} disabled={busy || !token} style={({ pressed }) => ({ marginTop: 24, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
-          <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? "Please wait..." : "Add to wallet"}</Text>
+          <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? t.common.pleaseWait : t.account.addToWallet}</Text>
         </Pressable>
         <Pressable onPress={onHistory} style={{ marginTop: 14, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, paddingHorizontal: 16, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View>
-            <Text style={{ fontWeight: "700", color: colors.primary }}>Payment history</Text>
-            <Text style={{ color: colors.muted, marginTop: 2, fontSize: 13 }}>Top-ups and listing charges</Text>
+            <Text style={{ fontWeight: "700", color: colors.primary }}>{t.account.paymentHistory}</Text>
+            <Text style={{ color: colors.muted, marginTop: 2, fontSize: 13 }}>{t.account.historyHint}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.primary} />
         </Pressable>
-        {!token ? <Text style={{ color: colors.muted, marginTop: 12 }}>Sign in to use your wallet.</Text> : null}
+        {!token ? <Text style={{ color: colors.muted, marginTop: 12 }}>{t.account.signInWallet}</Text> : null}
       </KeyboardFormScroll>
     </KeyboardScreen>
   );
 }
 
 function paymentTitle(item: WalletTransaction) {
-  if (item.reason === "wallet_topup") return "Added to wallet";
-  if (item.reason === "listing_year") return "Listing for 1 year";
-  if (item.reason === "listing_month") return "Listing for 1 month";
+  const text = getCopy().account;
+  if (item.reason === "wallet_topup") return text.topup;
+  if (item.reason === "listing_year") return text.yearFee;
+  if (item.reason === "listing_month") return text.monthFee;
   return item.reason.replace(/_/g, " ");
 }
 
 export function PaymentHistoryScreen() {
   const { token } = useAuth();
+  const { t } = useI18n();
   const [items, setItems] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -209,14 +221,14 @@ export function PaymentHistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <PageHeader title="Payment history" />
+      <PageHeader title={t.account.paymentHistory} />
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 28 }}>
         {loading ? <ListSkeleton /> : null}
-        {!loading && items.length === 0 ? <Text style={{ color: colors.muted }}>No payments yet. Money you add and listing fees you pay will show here.</Text> : null}
+        {!loading && items.length === 0 ? <Text style={{ color: colors.muted }}>{t.account.noPayments}</Text> : null}
         {!loading ? items.map((item) => {
           const credit = item.direction === "credit";
           const when = new Date(item.created_at);
-          const date = Number.isNaN(when.getTime()) ? "" : when.toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+          const date = Number.isNaN(when.getTime()) ? "" : when.toLocaleString(getLocale(), { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
           return (
             <View key={item.id} style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16, marginBottom: 12 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
@@ -258,10 +270,22 @@ function ActiveMark() {
 }
 
 function statusLabel(status: string) {
-  if (status === "published") return "Active";
-  if (status === "pending_review") return "Draft";
-  if (status === "expired") return "Expired";
+  const text = getCopy().account;
+  if (status === "published") return text.active;
+  if (status === "pending_review" || status === "draft") return text.draft;
+  if (status === "expired") return text.expired;
+  if (status === "sold") return text.sold;
+  if (status === "rented") return text.rented;
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function listingTabLabel(id: (typeof listingTabs)[number]["id"]) {
+  const text = getCopy().account;
+  if (id === "active") return text.active;
+  if (id === "expired") return text.expired;
+  if (id === "draft") return text.draft;
+  if (id === "sold") return text.sold;
+  return text.rented;
 }
 
 function listingFee(item: PropertyCard) {
@@ -281,6 +305,7 @@ function DeletePropertyDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onCancel}>
       <Pressable onPress={busy ? undefined : onCancel} style={{ flex: 1, backgroundColor: "rgba(28,28,28,0.45)", justifyContent: "center", paddingHorizontal: 28 }}>
@@ -289,14 +314,14 @@ function DeletePropertyDialog({
             <Ionicons name="trash-outline" size={24} color={colors.danger} />
           </View>
           <Text style={{ marginTop: 14, fontSize: 18, fontWeight: "800", color: colors.ink, textAlign: "center" }}>
-            {error ? "Could not delete property" : "Delete property"}
+            {error ? t.details.deleteFailed : t.details.deleteTitle}
           </Text>
           <Text style={{ marginTop: 8, color: colors.muted, lineHeight: 20, textAlign: "center" }}>
-            {error || `Delete “${title}”? This removes the listing for everyone. This cannot be undone.`}
+            {error || fill(t.details.deleteBody, { title })}
           </Text>
           <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
             <Pressable onPress={onCancel} disabled={busy} style={{ flex: 1, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, opacity: busy ? 0.6 : 1 }}>
-              <Text style={{ fontWeight: "700", color: colors.primary }}>{error ? "Close" : "Cancel"}</Text>
+                <Text style={{ fontWeight: "700", color: colors.primary }}>{error ? t.common.close : t.common.cancel}</Text>
             </Pressable>
             {error ? null : (
               <Pressable
@@ -304,7 +329,7 @@ function DeletePropertyDialog({
                 disabled={busy}
                 style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: 14, backgroundColor: pressed ? "#9A2E24" : colors.danger, alignItems: "center", justifyContent: "center", opacity: busy ? 0.7 : 1 })}
               >
-                <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? "Deleting..." : "Delete"}</Text>
+                <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? t.common.deleting : t.common.delete}</Text>
               </Pressable>
             )}
           </View>
@@ -319,11 +344,11 @@ function propertyActions(item: PropertyCard, onEdit: (id: string) => void, onDel
     <View style={{ marginTop: 8, flexDirection: "row", gap: 6 }}>
       <Pressable onPress={() => onEdit(item.id)} style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, paddingVertical: 6 }}>
         <Ionicons name="create-outline" size={14} color={colors.primary} />
-        <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>Edit</Text>
+        <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>{getCopy().common.edit}</Text>
       </Pressable>
       <Pressable onPress={() => onDelete(item)} style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 14, borderWidth: 1.5, borderColor: colors.danger, paddingVertical: 6 }}>
         <Ionicons name="trash-outline" size={14} color={colors.danger} />
-        <Text style={{ color: colors.danger, fontWeight: "700", fontSize: 12 }}>Delete</Text>
+        <Text style={{ color: colors.danger, fontWeight: "700", fontSize: 12 }}>{getCopy().common.delete}</Text>
       </Pressable>
     </View>
   );
@@ -331,6 +356,7 @@ function propertyActions(item: PropertyCard, onEdit: (id: string) => void, onDel
 
 export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) => void; onEdit: (id: string) => void }) {
   const { token, session } = useAuth();
+  const { t } = useI18n();
   const pay = useRazorpay();
   const [tab, setTab] = useState<(typeof listingTabs)[number]["id"]>("active");
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -379,7 +405,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
       setTab("active");
       refresh();
     } catch (err) {
-      setPayError(err instanceof Error ? err.message : "Payment failed");
+      setPayError(err instanceof Error ? err.message : t.account.paymentFailed);
     } finally {
       setPayingId(null);
     }
@@ -404,20 +430,20 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
   const cardWidth = propertyGridCardWidth();
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <PageHeader title="My Properties" />
+      <PageHeader title={t.account.myProperties} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false} scrollEventThrottle={16} onScroll={(event) => { if (nearScrollEnd(event)) loadMore(); }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refresh()} tintColor={colors.primary} colors={[colors.primary]} />}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, maxHeight: 44, marginBottom: 16 }} contentContainerStyle={{ alignItems: "center" }}>
         {listingTabs.map((entry) => {
           const active = tab === entry.id;
           return (
             <Pressable key={entry.id} onPress={() => setTab(entry.id)} style={{ backgroundColor: active ? colors.primary : colors.card, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginRight: 8, borderWidth: 1, borderColor: active ? colors.primary : colors.line }}>
-              <Text style={{ color: active ? colors.white : colors.muted, fontWeight: "700" }}>{entry.label}</Text>
+              <Text style={{ color: active ? colors.white : colors.muted, fontWeight: "700" }}>{listingTabLabel(entry.id)}</Text>
             </Pressable>
           );
         })}
       </ScrollView>
       {error || payError ? <Text style={styles.error}>{payError || error}</Text> : null}
-      {!token ? <Text style={styles.meta}>Sign in to see your listings.</Text> : null}
+      {!token ? <Text style={styles.meta}>{t.account.signInListings}</Text> : null}
       {token && loading ? <PropertyGridSkeleton width={cardWidth} /> : null}
       {token && !loading && shown.length === 0 ? <EmptyState kind={tab === "active" ? "active" : "search"} /> : null}
       {token && !loading ? (
@@ -437,7 +463,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
                 {propertyActions(item, onEdit, (row) => { setDeleteError(""); setPendingDelete(row); })}
                 {needsPay ? (
                   <Pressable onPress={() => activate(item)} disabled={payingId === item.id} style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 6, alignItems: "center" }}>
-                    <Text style={{ color: colors.white, fontWeight: "700", fontSize: 12 }}>{payingId === item.id ? "Please wait..." : `Pay ₹${listingFee(item)}`}</Text>
+                    <Text style={{ color: colors.white, fontWeight: "700", fontSize: 12 }}>{payingId === item.id ? t.common.pleaseWait : fill(t.account.pay, { amount: listingFee(item) })}</Text>
                   </Pressable>
                 ) : !active ? (
                   <View style={{ alignSelf: "flex-start", backgroundColor: "#F8EEDD", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -467,6 +493,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
 }
 
 export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
   const { items, ready, toggle, reload, loadMore, loadingMore } = useFavorites();
@@ -475,9 +502,9 @@ export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
     <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 8 }}>
-      <Text style={{ fontSize: 26, fontWeight: "800", color: colors.ink }}>Favorites</Text>
+      <Text style={{ fontSize: 26, fontWeight: "800", color: colors.ink }}>{t.account.favorites}</Text>
       <Text style={{ color: colors.muted, marginTop: 2 }}>
-        {!token ? "Sign in to see saved properties." : loading ? "Loading your saved homes" : `${items.length} ${items.length === 1 ? "property" : "properties"} saved`}
+        {!token ? t.account.signInSaved : loading ? t.account.loadingSaved : fill(items.length === 1 ? t.account.savedOne : t.account.savedMany, { count: items.length })}
       </Text>
     </View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false} scrollEventThrottle={16} onScroll={(event) => { if (nearScrollEnd(event)) loadMore(); }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await reload(); } finally { setRefreshing(false); } }} tintColor={colors.primary} colors={[colors.primary]} />}>
@@ -501,16 +528,18 @@ export function FavoritesScreen({ onOpen }: { onOpen: (id: string) => void }) {
 function timeAgo(value: string) {
   const then = new Date(value).getTime();
   if (Number.isNaN(then)) return "";
+  const text = getCopy().account;
   const minutes = Math.max(1, Math.round((Date.now() - then) / 60000));
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  if (minutes < 60) return fill(minutes === 1 ? text.minuteAgo : text.minutesAgo, { count: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  if (hours < 24) return fill(hours === 1 ? text.hourAgo : text.hoursAgo, { count: hours });
   const days = Math.round(hours / 24);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
+  return fill(days === 1 ? text.dayAgo : text.daysAgo, { count: days });
 }
 
 export function InquiriesScreen({ onChat }: { onChat: (propertyId: string, buyerId?: string | null) => void }) {
   const { token } = useAuth();
+  const { t } = useI18n();
   const [items, setItems] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"new" | "contacted" | "closed">("new");
@@ -538,12 +567,12 @@ export function InquiriesScreen({ onChat }: { onChat: (propertyId: string, buyer
   });
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <PageHeader title="Inquiries" />
+      <PageHeader title={t.account.inquiries} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
         {(["new", "contacted", "closed"] as const).map((entry) => {
           const active = tab === entry;
-          const label = entry === "new" ? "New" : entry === "contacted" ? "Contacted" : "Closed";
+          const label = entry === "new" ? t.account.inquiryNew : entry === "contacted" ? t.account.contacted : t.account.closed;
           return (
             <Pressable key={entry} onPress={() => setTab(entry)} style={{ backgroundColor: active ? colors.primary : colors.card, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: active ? colors.primary : colors.line }}>
               <Text style={{ fontWeight: "700", color: active ? colors.white : colors.muted }}>{label}</Text>
@@ -557,11 +586,11 @@ export function InquiriesScreen({ onChat }: { onChat: (propertyId: string, buyer
               <Ionicons name="person" size={20} color={colors.primary} />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={{ fontWeight: "600", color: colors.ink }}>{item.name || "Buyer"}</Text>
-              <Text style={{ color: colors.muted, marginTop: 2 }} numberOfLines={1}>Interested in {item.property_title || "a property"}</Text>
+              <Text style={{ fontWeight: "600", color: colors.ink }}>{item.name || t.common.buyer}</Text>
+              <Text style={{ color: colors.muted, marginTop: 2 }} numberOfLines={1}>{fill(t.account.interested, { title: item.property_title || t.common.property })}</Text>
               <Text style={{ color: colors.faint, fontSize: 12, marginTop: 2 }}>{timeAgo(item.created_at)}</Text>
             </View>
-            <Text style={{ color: colors.primary, fontWeight: "700" }}>Chat</Text>
+            <Text style={{ color: colors.primary, fontWeight: "700" }}>{t.common.chat}</Text>
           </Pressable>
       ))}
       {!loading && shown.length === 0 ? <EmptyState kind="search" /> : null}
@@ -571,20 +600,22 @@ export function InquiriesScreen({ onChat }: { onChat: (propertyId: string, buyer
 }
 
 function visitStatusStyle(status: string) {
-  if (status === "confirmed") return { bg: "#E7F0EA", color: colors.success, label: "Confirmed" };
-  if (status === "completed") return { bg: colors.primarySoft, color: colors.primaryDark, label: "Completed" };
-  if (status === "cancelled") return { bg: "#F8E6E3", color: colors.danger, label: "Cancelled" };
-  if (status === "rescheduled") return { bg: "#F8EEDD", color: colors.warning, label: "Rescheduled" };
-  return { bg: "#F8EEDD", color: colors.warning, label: "Requested" };
+  const text = getCopy().account;
+  if (status === "confirmed") return { bg: "#E7F0EA", color: colors.success, label: text.confirmed };
+  if (status === "completed") return { bg: colors.primarySoft, color: colors.primaryDark, label: text.completed };
+  if (status === "cancelled") return { bg: "#F8E6E3", color: colors.danger, label: text.cancelled };
+  if (status === "rescheduled") return { bg: "#F8EEDD", color: colors.warning, label: text.rescheduled };
+  return { bg: "#F8EEDD", color: colors.warning, label: text.requested };
 }
 
 function visitWhen(value?: string | null) {
-  if (!value) return "Time not set";
-  return new Date(value).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+  if (!value) return getCopy().account.timeNotSet;
+  return new Date(value).toLocaleString(getLocale(), { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 export function VisitsScreen({ onOpen }: { onOpen: (id: string) => void }) {
   const { token, me } = useAuth();
+  const { t } = useI18n();
   const [items, setItems] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -606,7 +637,7 @@ export function VisitsScreen({ onOpen }: { onOpen: (id: string) => void }) {
   }, [token]);
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <PageHeader title="Scheduled Visits" subtitle={items.length ? `${items.length} visit${items.length === 1 ? "" : "s"}` : "Tap a visit to open the property"} />
+      <PageHeader title={t.account.visits} subtitle={items.length ? fill(items.length === 1 ? t.account.visitOne : t.account.visitMany, { count: items.length }) : t.account.visitHint} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28 }}>
       {loading ? <ListSkeleton /> : null}
       {!loading && items.length === 0 ? <EmptyState kind="search" /> : null}
@@ -626,7 +657,7 @@ export function VisitsScreen({ onOpen }: { onOpen: (id: string) => void }) {
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-                  <Text style={{ flex: 1, fontWeight: "800", fontSize: 16, color: colors.ink }} numberOfLines={2}>{item.property_title || "Property"}</Text>
+                  <Text style={{ flex: 1, fontWeight: "800", fontSize: 16, color: colors.ink }} numberOfLines={2}>{item.property_title || t.common.property}</Text>
                   <View style={{ backgroundColor: tone.bg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 }}>
                     <Text style={{ color: tone.color, fontSize: 11, fontWeight: "800" }}>{tone.label}</Text>
                   </View>
@@ -640,7 +671,7 @@ export function VisitsScreen({ onOpen }: { onOpen: (id: string) => void }) {
             </Pressable>
             {canConfirm ? (
               <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
-                <Button title="Confirm visit" onPress={() => {
+                <Button title={t.account.confirmVisit} onPress={() => {
                   if (!token) return;
                   api.updateVisit(item.id, { status: "confirmed" }, token).then(() => {
                     setItems((current) => current.map((row) => row.id === item.id ? { ...row, status: "confirmed" } : row));
@@ -674,6 +705,8 @@ export function ProfileScreen({
   onSignIn: () => void;
 }) {
   const { me, token, session } = useAuth();
+  const { t } = useI18n();
+  const language = useLanguagePicker();
   const insets = useSafeAreaInsets();
   const [balance, setBalance] = useState(0);
   const [walletLoading, setWalletLoading] = useState(Boolean(token));
@@ -731,16 +764,21 @@ export function ProfileScreen({
   if (!session) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.page }}>
-        {showBack ? <PageHeader title="Profile" /> : <View style={{ height: insets.top + 8 }} />}
+        {showBack ? <PageHeader title={t.tabs.profile} /> : <View style={{ height: insets.top + 8 }} />}
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingBottom: 48 }}>
           <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="person-outline" size={40} color={colors.primary} />
           </View>
-          <Text style={{ marginTop: 16, fontSize: 24, fontWeight: "800", color: colors.ink }}>Guest</Text>
-          <Text style={{ marginTop: 8, color: colors.muted, textAlign: "center", lineHeight: 22 }}>Please sign in to add a property and manage your listings.</Text>
+          <Text style={{ marginTop: 16, fontSize: 24, fontWeight: "800", color: colors.ink }}>{t.common.guest}</Text>
+          <Text style={{ marginTop: 8, color: colors.muted, textAlign: "center", lineHeight: 22 }}>{t.account.guestHint}</Text>
           <Pressable onPress={onSignIn} style={({ pressed }) => ({ marginTop: 24, alignSelf: "stretch", backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
-            <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>Sign in</Text>
+            <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>{t.common.signIn}</Text>
           </Pressable>
+          <Pressable onPress={language.openPicker} style={{ marginTop: 16, flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name="language-outline" size={18} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontWeight: "700" }}>{t.common.language}: {language.nativeName}</Text>
+          </Pressable>
+          {language.modal}
         </View>
       </View>
     );
@@ -748,15 +786,15 @@ export function ProfileScreen({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      {showBack ? <PageHeader title="Profile" /> : <View style={{ height: insets.top + 8 }} />}
+      {showBack ? <PageHeader title={t.tabs.profile} /> : <View style={{ height: insets.top + 8 }} />}
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false} scrollEventThrottle={16} onScroll={(event) => { if (nearScrollEnd(event)) propertiesPage.loadMore(); }} refreshControl={<RefreshControl refreshing={walletRefreshing || propertiesPage.refreshing} onRefresh={() => { loadWallet(true); propertiesPage.refresh(); }} tintColor={colors.primary} colors={[colors.primary]} />}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }}>
           <View style={{ width: 64, height: 64, borderRadius: 32, overflow: "hidden", backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }}>
             {me?.profile?.avatar_url ? <Image source={{ uri: me.profile.avatar_url }} style={{ width: 64, height: 64 }} /> : <Ionicons name="person" size={28} color={colors.primary} />}
           </View>
           <View style={{ flex: 1, minWidth: 0, paddingRight: 28 }}>
-            <Text numberOfLines={1} style={{ fontSize: 20, fontWeight: "800", color: colors.ink }}>{me?.profile?.full_name || "Guest"}</Text>
-            <Text numberOfLines={1} style={{ marginTop: 4, color: colors.muted }}>{me?.profile?.city || (me?.profile?.phone ? `+91 ${me.profile.phone}` : "Your account")}</Text>
+            <Text numberOfLines={1} style={{ fontSize: 20, fontWeight: "800", color: colors.ink }}>{me?.profile?.full_name || t.common.guest}</Text>
+            <Text numberOfLines={1} style={{ marginTop: 4, color: colors.muted }}>{me?.profile?.city || (me?.profile?.phone ? `+91 ${me.profile.phone}` : t.account.yourAccount)}</Text>
           </View>
           <Pressable onPress={onEditProfile} hitSlop={8} style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="create-outline" size={22} color={colors.primary} />
@@ -764,21 +802,28 @@ export function ProfileScreen({
         </View>
 
             <View style={{ marginTop: 16, backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16 }}>
-              <Text style={{ color: colors.muted, fontWeight: "600" }}>Wallet balance</Text>
+              <Text style={{ color: colors.muted, fontWeight: "600" }}>{t.account.balance}</Text>
               <Text style={{ marginTop: 6, fontSize: 30, fontWeight: "800", color: colors.ink }}>{loading ? "..." : inr(balance)}</Text>
               <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
                 <Pressable onPress={onWallet} style={({ pressed }) => ({ flex: 1, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" })}>
-                  <Text style={{ color: colors.white, fontWeight: "700" }}>Add money</Text>
+                  <Text style={{ color: colors.white, fontWeight: "700" }}>{t.account.addMoney}</Text>
                 </Pressable>
                 <Pressable onPress={onHistory} style={{ flex: 1, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, height: 52, alignItems: "center", justifyContent: "center", backgroundColor: colors.card }}>
-                  <Text style={{ color: colors.primary, fontWeight: "700" }}>History</Text>
+                  <Text style={{ color: colors.primary, fontWeight: "700" }}>{t.account.history}</Text>
                 </Pressable>
               </View>
             </View>
 
-            <Text style={{ marginTop: 28, marginBottom: 12, fontSize: 18, fontWeight: "800", color: colors.ink }}>My properties</Text>
+            <Pressable onPress={language.openPicker} style={{ marginTop: 16, backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 16, paddingVertical: 14, flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Ionicons name="language-outline" size={22} color={colors.primary} />
+              <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink }}>{t.common.language}</Text>
+              <Text style={{ color: colors.muted, fontWeight: "700" }}>{language.nativeName}</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.faint} />
+            </Pressable>
+            {language.modal}
+            <Text style={{ marginTop: 28, marginBottom: 12, fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.account.myProperties}</Text>
             {loading ? <PropertyGridSkeleton width={cardWidth} /> : null}
-            {!loading && properties.length === 0 ? <Text style={{ color: colors.muted }}>You have not listed a property yet.</Text> : null}
+            {!loading && properties.length === 0 ? <Text style={{ color: colors.muted }}>{t.account.noneListed}</Text> : null}
             {!loading && properties.length > 0 ? (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
                 {properties.map((item) => (
@@ -820,6 +865,7 @@ export function ProfileScreen({
 
 export function EditProfileScreen() {
   const { me, token, refreshMe } = useAuth();
+  const { t } = useI18n();
   const [fullName, setFullName] = useState(me?.profile?.full_name || "");
   const [phone, setPhone] = useState(me?.profile?.phone || "");
   const [city, setCity] = useState(me?.profile?.city || "");
@@ -835,19 +881,19 @@ export function EditProfileScreen() {
     if (!token) return;
     await api.updateMe({ full_name: fullName, phone, city }, token);
     await refreshMe();
-    setSaved("Profile saved.");
+    setSaved(t.account.profileSaved);
   }
 
   return (
     <KeyboardScreen style={{ backgroundColor: colors.page }}>
-      <PageHeader title="Edit profile" />
+      <PageHeader title={t.account.editProfile} />
       <KeyboardFormScroll contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 12 }}>
           {saved ? <Text style={styles.ok}>{saved}</Text> : null}
-          <Field label="Name" value={fullName} onChangeText={setFullName} />
-          <Field label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-          <Field label="City" value={city} onChangeText={setCity} />
-          <Button title="Save" onPress={save} />
+          <Field label={t.account.name} value={fullName} onChangeText={setFullName} />
+          <Field label={t.account.phone} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+          <Field label={t.listing.city} value={city} onChangeText={setCity} />
+          <Button title={t.common.save} onPress={save} />
         </View>
       </KeyboardFormScroll>
     </KeyboardScreen>
@@ -861,21 +907,24 @@ function sameDay(a: Date, b: Date) {
 function dayLabel(value: string) {
   const date = new Date(value);
   const now = new Date();
-  if (sameDay(date, now)) return "Today";
+  const text = getCopy().common;
+  if (sameDay(date, now)) return text.today;
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (sameDay(date, yesterday)) return "Yesterday";
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: date.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+  if (sameDay(date, yesterday)) return text.yesterday;
+  return date.toLocaleDateString(getLocale(), { day: "numeric", month: "long", year: date.getFullYear() === now.getFullYear() ? undefined : "numeric" });
 }
 
 function noticeVisual(type: string) {
-  if (type === "new_inquiry") return { icon: "chatbubble-ellipses-outline" as const, bg: colors.primarySoft, color: colors.primaryDark, chip: "Enquiry" };
-  if (type === "visit_confirmed") return { icon: "checkmark-circle-outline" as const, bg: "#E7F0EA", color: colors.success, chip: "Visit" };
-  return { icon: "calendar-outline" as const, bg: "#F8EEDD", color: colors.warning, chip: "Visit" };
+  const text = getCopy().account;
+  if (type === "new_inquiry") return { icon: "chatbubble-ellipses-outline" as const, bg: colors.primarySoft, color: colors.primaryDark, chip: text.enquiryChip };
+  if (type === "visit_confirmed") return { icon: "checkmark-circle-outline" as const, bg: "#E7F0EA", color: colors.success, chip: text.visitChip };
+  return { icon: "calendar-outline" as const, bg: "#F8EEDD", color: colors.warning, chip: text.visitChip };
 }
 
 export function NotificationsScreen({ onOpen }: { onOpen: (item: NotificationItem) => void }) {
   const { token } = useAuth();
+  const { t } = useI18n();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -929,16 +978,16 @@ export function NotificationsScreen({ onOpen }: { onOpen: (item: NotificationIte
   }
 
   const tabs = [
-    { id: "all" as const, label: "All" },
-    { id: "enquiry" as const, label: "Enquiries" },
-    { id: "visit" as const, label: "Visits" },
+    { id: "all" as const, label: t.account.all },
+    { id: "enquiry" as const, label: t.account.enquiries },
+    { id: "visit" as const, label: t.account.visitChip },
   ];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <PageHeader
-        title="Notifications"
-        subtitle={unread ? `${unread} unread` : "You're all caught up"}
+        title={t.account.notifications}
+        subtitle={unread ? fill(unread === 1 ? t.account.unreadOne : t.account.unreadMany, { count: unread }) : t.account.caughtUp}
         right={(
           <Pressable
             onPress={markAll}
@@ -995,7 +1044,7 @@ export function NotificationsScreen({ onOpen }: { onOpen: (item: NotificationIte
                   {item.message ? <Text style={{ marginTop: 4, fontSize: 14, lineHeight: 20, color: colors.muted }}>{item.message}</Text> : null}
                   <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 4 }}>
                     <Ionicons name="time-outline" size={13} color={colors.faint} />
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: colors.faint }}>{new Date(item.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: colors.faint }}>{new Date(item.created_at).toLocaleTimeString(getLocale(), { hour: "numeric", minute: "2-digit" })}</Text>
                     <View style={{ marginLeft: "auto", backgroundColor: visual.bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 }}>
                       <Text style={{ fontSize: 11, fontWeight: "800", color: visual.color }}>{visual.chip}</Text>
                     </View>
@@ -1009,8 +1058,8 @@ export function NotificationsScreen({ onOpen }: { onOpen: (item: NotificationIte
       {!loading && shown.length === 0 ? (
         <View style={{ alignItems: "center", marginHorizontal: 16, marginTop: 24, padding: 24, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card }}>
           <Ionicons name="notifications-off-outline" size={34} color={colors.faint} />
-          <Text style={{ marginTop: 10, fontSize: 18, fontWeight: "800", color: colors.ink }}>No notifications</Text>
-          <Text style={{ marginTop: 6, fontSize: 14, color: colors.muted, textAlign: "center" }}>Enquiries and visit requests from other people show up here.</Text>
+          <Text style={{ marginTop: 10, fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.account.noNotifications}</Text>
+          <Text style={{ marginTop: 6, fontSize: 14, color: colors.muted, textAlign: "center" }}>{t.account.noNotificationsHint}</Text>
         </View>
       ) : null}
       </ScrollView>

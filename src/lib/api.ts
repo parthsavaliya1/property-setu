@@ -1,6 +1,7 @@
 import Constants from "expo-constants";
 import { File } from "expo-file-system";
 import type { Category, ChatMessage, ChatThread, Inquiry, Me, NotificationItem, PropertyCard, PropertyDetail, Visit, WalletTransaction } from "../types/database";
+import { getCopy } from "../i18n/active";
 import { getRemoteSettings } from "./remoteConfig";
 
 export const PROPERTY_PAGE_SIZE = 20;
@@ -269,15 +270,16 @@ export const api = {
 };
 
 export function inr(value: string | number | null | undefined) {
-  if (value == null || value === "") return "Price on request";
+  if (value == null || value === "") return getCopy().common.priceOnRequest;
   const amount = Number(value);
-  if (Number.isNaN(amount)) return "Price on request";
+  if (Number.isNaN(amount)) return getCopy().common.priceOnRequest;
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
 }
 
 export function listingLabel(type: string) {
-  if (type === "rent") return "For Rent";
-  if (type === "lease") return "For Lease";
-  if (type === "pg") return "PG";
-  return "For Sale";
+  const text = getCopy().listingTypes;
+  if (type === "rent") return text.forRent;
+  if (type === "lease") return text.forLease;
+  if (type === "pg") return text.pg;
+  return text.forSale;
 }
