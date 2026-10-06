@@ -1,4 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons";
+import { useFonts } from "expo-font";
 import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Animated, Dimensions, Image, Pressable, StatusBar, Text, TextInput, View, type TextInputProps } from "react-native";
@@ -10,7 +12,6 @@ import { fill } from "../i18n/format";
 import { useI18n } from "../i18n";
 import { buttonShadow, colors } from "../theme";
 
-const splashLogo = require("../../assets/center-logo.png");
 const splashHouse = require("../../assets/splash-house.jpg");
 const loginBg = require("../../assets/login-bg.jpg");
 
@@ -35,13 +36,42 @@ export function SplashScreen({ onDone }: { onDone: (hasSession: boolean, seen: b
   }, [ready, languageReady, onDone, session]);
 
   const insets = useSafeAreaInsets();
-  const { width, height } = Dimensions.get("window");
-  const logoWidth = Math.min(width * 0.42, 180);
+  const [fontsLoaded] = useFonts({ GreatVibes: require("../../assets/fonts/GreatVibes-Regular.ttf") });
+  const { width, height } = Dimensions.get("screen");
+  const scriptSize = Math.max(26, Math.min(30, width * 0.072));
+  const scriptStyle = {
+    color: "#FFFFFF",
+    fontSize: scriptSize,
+    lineHeight: scriptSize * 1.35,
+    fontFamily: fontsLoaded ? "GreatVibes" : undefined,
+    paddingVertical: 2,
+    includeFontPadding: false,
+    textShadowColor: "rgba(0,0,0,0.4)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  };
   return (
-    <View style={{ width, height, backgroundColor: colors.primaryDark }}>
+    <View style={{ flex: 1, backgroundColor: "#1B2436" }}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <Image source={splashHouse} style={{ position: "absolute", top: 0, left: 0, width, height }} resizeMode="cover" />
-      <Image source={splashLogo} style={{ width: logoWidth, height: logoWidth * (1024 / 1536), alignSelf: "center", marginTop: insets.top + 24 }} resizeMode="contain" />
+      <View style={{ flex: 1, alignItems: "center", paddingTop: insets.top + 36, paddingHorizontal: 20 }}>
+        <Ionicons name="home-outline" size={58} color="#FFFFFF" />
+        <Text style={{ marginTop: 16, color: "#FFFFFF", fontSize: 34, fontWeight: "700", letterSpacing: 0.2 }}>PropertyHub</Text>
+        <Text style={{ marginTop: 8, color: "rgba(255,255,255,0.92)", fontSize: 16, fontWeight: "400" }}>Find Your Perfect Place</Text>
+      </View>
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: 16,
+          right: 16,
+          bottom: insets.bottom + 64,
+          transform: [{ rotate: "-16deg" }],
+        }}
+      >
+        <Text style={scriptStyle}>More Than Property</Text>
+        <Text style={{ ...scriptStyle, marginTop: -6, marginLeft: 22 }}>A Better Tomorrow</Text>
+      </View>
     </View>
   );
 }

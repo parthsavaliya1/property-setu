@@ -2,15 +2,15 @@
   "expo": {
     "name": "PropertySetu",
     "slug": "propertyhub",
-    "icon": "./assets/logo.png",
+    "icon": "./assets/app-icon.png",
     "scheme": "propertyhub",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#8F4F32"
+      "image": "./assets/splash-brand.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#F7F3EC"
     },
     "ios": {
       "supportsTablet": true,
@@ -21,8 +21,8 @@
       "usesCleartextTraffic": true,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/logo.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/app-icon.png",
+        "backgroundColor": "#F7F3EC"
       }
     },
     "web": {
