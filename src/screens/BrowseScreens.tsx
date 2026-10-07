@@ -759,6 +759,10 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
       requireLogin("Sign in to chat about this property.");
       return;
     }
+    if (item.status === "sold" || item.status === "rented") {
+      setNote(t.details.unavailable);
+      return;
+    }
     if (item.owner_id === session?.user.id) {
       setNote("This is your listing. Open Profile, then Messages, to reply.");
       return;
@@ -794,6 +798,8 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
 
   const liked = isSaved(item.id, item.is_favorite);
   const mine = item.owner_id === session?.user.id;
+  const closed = item.status === "sold" || item.status === "rented";
+  const closedText = item.status === "sold" ? t.details.soldBanner : t.details.rentedBanner;
   const photos = (item.images?.length
     ? item.images.filter((image) => image.image_type !== "video").map((image) => image.image_url)
     : [item.cover_image]
@@ -832,6 +838,13 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
               ))}
             </ScrollView>
           ) : null}
+          {closed ? (
+            <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(28,28,28,0.42)", alignItems: "center", justifyContent: "center" }}>
+              <View style={{ borderWidth: 3, borderColor: "white", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8, transform: [{ rotate: "-12deg" }] }}>
+                <Text style={{ color: "white", fontWeight: "800", fontSize: 22, letterSpacing: 1 }}>{closedText}</Text>
+              </View>
+            </View>
+          ) : null}
           <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + 8, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <RoundIcon name="chevron-back" onPress={() => navigation.goBack()} />
             <View style={{ flexDirection: "row", gap: 8 }}>
@@ -868,6 +881,11 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
             <Ionicons name="location-sharp" size={15} color={colors.muted} />
             <Text style={{ flex: 1, color: colors.muted, fontSize: 14 }}>{place}</Text>
           </View>
+          {closed ? (
+            <View style={{ alignSelf: "flex-start", marginTop: 12, backgroundColor: "#F8EEDD", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ color: colors.warning, fontWeight: "800" }}>{closedText}</Text>
+            </View>
+          ) : null}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14 }}>
             <Text style={{ fontSize: 28, fontWeight: "800", color: colors.primary }}>{inr(item.price)}</Text>
             {item.is_price_negotiable ? <View style={{ backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: colors.white, fontWeight: "700", fontSize: 13 }}>{t.details.negotiable}</Text></View> : null}
@@ -918,7 +936,7 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
             {tab === "documents" ? (
               <View style={{ gap: 8 }}>
                 <Text style={{ color: colors.muted, lineHeight: 20 }}>{t.details.docsHint}</Text>
-                <Pressable onPress={() => onSchedule(item.id)}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.details.schedule}</Text></Pressable>
+                {closed ? <Text style={{ color: colors.warning, fontWeight: "700" }}>{t.details.unavailable}</Text> : <Pressable onPress={() => onSchedule(item.id)}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.details.schedule}</Text></Pressable>}
               </View>
             ) : null}
           </View>
@@ -926,6 +944,12 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
         </View>
       </ScrollView>
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.lineSoft, gap: 8 }}>
+        {closed ? (
+          <View style={{ height: 52, borderRadius: 14, backgroundColor: "#F8EEDD", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: colors.warning, fontWeight: "800" }}>{t.details.unavailable}</Text>
+          </View>
+        ) : (
+        <>
         <Pressable onPress={() => { if (!token) { requireLogin(t.gate.scheduleVisit); return; } onSchedule(item.id); }} style={({ pressed }) => ({ height: 52, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
           <Text style={{ color: colors.white, fontWeight: "700" }}>{t.details.schedule}</Text>
         </Pressable>
@@ -943,6 +967,8 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
           <Text style={{ color: "white", fontWeight: "700" }}>{t.common.chat}</Text>
         </Pressable>
         </View>
+        </>
+        )}
       </View>
       {zoomOpen && photos.length ? <PhotoZoom photos={photos} startIndex={photoIndex} onClose={() => setZoomOpen(false)} /> : null}
       {askDelete ? (

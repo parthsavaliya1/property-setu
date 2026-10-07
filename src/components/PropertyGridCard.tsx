@@ -8,6 +8,23 @@ import { cardShadow, colors } from "../theme";
 import type { PropertyCard } from "../types/database";
 import { ListingLabel } from "./ui";
 
+function closedLabel(status: string, sold: string, rented: string) {
+  if (status === "sold") return sold;
+  if (status === "rented") return rented;
+  return "";
+}
+
+function ClosedStamp({ label }: { label: string }) {
+  if (!label) return null;
+  return (
+    <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(28,28,28,0.42)", alignItems: "center", justifyContent: "center" }}>
+      <View style={{ borderWidth: 2, borderColor: "white", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, transform: [{ rotate: "-12deg" }] }}>
+        <Text style={{ color: "white", fontWeight: "800", fontSize: 12, letterSpacing: 0.6 }}>{label}</Text>
+      </View>
+    </View>
+  );
+}
+
 function photoTag(item: PropertyCard, premium: string, fresh: string) {
   if (item.listing_label === "Premium" || item.is_premium) return { label: premium, bg: "#FFF6DE", color: "#8A5A12" };
   const posted = new Date(item.published_at || item.created_at).getTime();
@@ -42,10 +59,12 @@ export function PropertyListCard({
   const { t } = useI18n();
   const place = [item.locality, item.city].filter(Boolean).join(", ") || t.common.locationMissing;
   const tag = photoTag(item, t.common.premium, t.common.new);
+  const closed = closedLabel(item.status, t.account.sold, t.account.rented);
   return (
     <Pressable onPress={onPress} style={{ width: "100%", alignSelf: "stretch", flexDirection: "row", alignItems: "flex-start", backgroundColor: colors.card, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
       <View style={{ width: 96, height: 96, borderRadius: 14, overflow: "hidden", backgroundColor: colors.secondary }}>
         {item.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : null}
+        <ClosedStamp label={closed} />
       </View>
       <View style={{ flex: 1, minWidth: 0, marginLeft: 12, paddingTop: 2 }}>
         <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: "600", color: colors.ink }}>{listHeadline(item)}</Text>
@@ -116,10 +135,12 @@ export function PropertyGridCard({
 }) {
   const { t } = useI18n();
   const place = [item.locality, item.city].filter(Boolean).join(", ") || t.common.locationMissing;
+  const closed = closedLabel(item.status, t.account.sold, t.account.rented);
   return (
     <Pressable onPress={onPress} style={{ width, backgroundColor: colors.card, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
       <View style={{ height: 120, width: "100%", backgroundColor: "#E7D9C8" }}>
         {item.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : null}
+        <ClosedStamp label={closed} />
         <ListingLabel label={listingBadge(item, "Premium")} />
         {corner ? (
           <View style={{ position: "absolute", top: 8, right: 8 }}>{corner}</View>

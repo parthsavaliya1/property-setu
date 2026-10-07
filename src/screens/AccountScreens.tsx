@@ -342,6 +342,64 @@ function DeletePropertyDialog({
   );
 }
 
+function closedStatus(item: PropertyCard) {
+  return item.listing_type === "sale" ? "sold" : "rented";
+}
+
+function stillListed(item: PropertyCard) {
+  if (!item.expires_at) return true;
+  const expires = new Date(item.expires_at).getTime();
+  return !Number.isNaN(expires) && expires > Date.now();
+}
+
+function MarkClosedDialog({
+  item,
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  item: PropertyCard;
+  busy: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useI18n();
+  const sold = item.listing_type === "sale";
+  return (
+    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onCancel}>
+      <Pressable onPress={busy ? undefined : onCancel} style={{ flex: 1, backgroundColor: "rgba(28,28,28,0.45)", justifyContent: "center", paddingHorizontal: 28 }}>
+        <Pressable onPress={() => undefined} style={{ backgroundColor: colors.card, borderRadius: 18, padding: 20 }}>
+          <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#F8EEDD", alignItems: "center", justifyContent: "center", alignSelf: "center" }}>
+            <Ionicons name="pricetag-outline" size={24} color={colors.warning} />
+          </View>
+          <Text style={{ marginTop: 14, fontSize: 18, fontWeight: "800", color: colors.ink, textAlign: "center" }}>
+            {error ? t.account.markFailed : sold ? t.account.markSoldTitle : t.account.markRentedTitle}
+          </Text>
+          <Text style={{ marginTop: 8, color: colors.muted, lineHeight: 20, textAlign: "center" }}>
+            {error || fill(sold ? t.account.markSoldBody : t.account.markRentedBody, { title: item.title })}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
+            <Pressable onPress={onCancel} disabled={busy} style={{ flex: 1, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, opacity: busy ? 0.6 : 1 }}>
+              <Text style={{ fontWeight: "700", color: colors.primary }}>{error ? t.common.close : t.common.cancel}</Text>
+            </Pressable>
+            {error ? null : (
+              <Pressable
+                onPress={onConfirm}
+                disabled={busy}
+                style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: 14, backgroundColor: pressed ? colors.primaryDark : colors.primary, alignItems: "center", justifyContent: "center", opacity: busy ? 0.7 : 1 })}
+              >
+                <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? t.common.pleaseWait : sold ? t.account.markSold : t.account.markRented}</Text>
+              </Pressable>
+            )}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function propertyActions(item: PropertyCard, onEdit: (id: string) => void, onDelete: (item: PropertyCard) => void) {
   return (
     <View style={{ marginTop: 8, flexDirection: "row", gap: 6 }}>
@@ -367,6 +425,10 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
   const [pendingDelete, setPendingDelete] = useState<PropertyCard | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [pendingClose, setPendingClose] = useState<PropertyCard | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState("");
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
   const page = usePagedProperties(
     (offset) => api.properties(`?mine=true&limit=${PROPERTY_PAGE_SIZE}&offset=${offset}`, token || undefined),
     token || "",
@@ -411,6 +473,38 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
       setPayError(err instanceof Error ? err.message : t.account.paymentFailed);
     } finally {
       setPayingId(null);
+    }
+  }
+
+  async function markClosed() {
+    if (!token || !pendingClose) return;
+    const next = closedStatus(pendingClose);
+    setClosing(true);
+    setCloseError("");
+    try {
+      await api.updateProperty(pendingClose.id, { status: next }, token);
+      setItems((current) => current.map((row) => row.id === pendingClose.id ? { ...row, status: next } : row));
+      setPendingClose(null);
+      setTab(next);
+    } catch (err) {
+      setCloseError(err instanceof Error ? err.message : t.account.markFailed);
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  async function reopen(item: PropertyCard) {
+    if (!token) return;
+    setPayError("");
+    setReopeningId(item.id);
+    try {
+      await api.updateProperty(item.id, { status: "published" }, token);
+      setItems((current) => current.map((row) => row.id === item.id ? { ...row, status: "published" } : row));
+      setTab("active");
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : t.account.markFailed);
+    } finally {
+      setReopeningId(null);
     }
   }
 
@@ -464,6 +558,16 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
             footer={
               <View style={{ marginTop: 8, gap: 6 }}>
                 {propertyActions(item, onEdit, (row) => { setDeleteError(""); setPendingDelete(row); })}
+                {active ? (
+                  <Pressable onPress={() => { setCloseError(""); setPendingClose(item); }} style={{ borderRadius: 14, borderWidth: 1.5, borderColor: colors.warning, paddingVertical: 6, alignItems: "center" }}>
+                    <Text style={{ color: colors.warning, fontWeight: "700", fontSize: 12 }}>{item.listing_type === "sale" ? t.account.markSold : t.account.markRented}</Text>
+                  </Pressable>
+                ) : null}
+                {(item.status === "sold" || item.status === "rented") && stillListed(item) ? (
+                  <Pressable onPress={() => void reopen(item)} disabled={reopeningId === item.id} style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 6, alignItems: "center", opacity: reopeningId === item.id ? 0.7 : 1 }}>
+                    <Text style={{ color: colors.white, fontWeight: "700", fontSize: 12 }}>{reopeningId === item.id ? t.common.pleaseWait : t.account.listAgain}</Text>
+                  </Pressable>
+                ) : null}
                 {needsPay ? (
                   <Pressable onPress={() => activate(item)} disabled={payingId === item.id} style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 6, alignItems: "center" }}>
                     <Text style={{ color: colors.white, fontWeight: "700", fontSize: 12 }}>{payingId === item.id ? t.common.pleaseWait : fill(t.account.pay, { amount: listingFee(item) })}</Text>
@@ -489,6 +593,15 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
           error={deleteError}
           onCancel={() => { if (!deleting) { setPendingDelete(null); setDeleteError(""); } }}
           onConfirm={() => void removeListing()}
+        />
+      ) : null}
+      {pendingClose ? (
+        <MarkClosedDialog
+          item={pendingClose}
+          busy={closing}
+          error={closeError}
+          onCancel={() => { if (!closing) { setPendingClose(null); setCloseError(""); } }}
+          onConfirm={() => void markClosed()}
         />
       ) : null}
     </View>
@@ -717,6 +830,11 @@ export function ProfileScreen({
   const [pendingDelete, setPendingDelete] = useState<PropertyCard | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [pendingClose, setPendingClose] = useState<PropertyCard | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState("");
+  const [listingError, setListingError] = useState("");
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
   const cardWidth = propertyGridCardWidth();
   const propertiesPage = usePagedProperties(
     (offset) => api.properties(`?mine=true&limit=${PROPERTY_PAGE_SIZE}&offset=${offset}`, token || undefined),
@@ -748,6 +866,36 @@ export function ProfileScreen({
   useEffect(() => {
     loadWallet(false);
   }, [loadWallet]);
+
+  async function markClosed() {
+    if (!token || !pendingClose) return;
+    const next = closedStatus(pendingClose);
+    setClosing(true);
+    setCloseError("");
+    try {
+      await api.updateProperty(pendingClose.id, { status: next }, token);
+      propertiesPage.setItems((current) => current.map((row) => row.id === pendingClose.id ? { ...row, status: next } : row));
+      setPendingClose(null);
+    } catch (err) {
+      setCloseError(err instanceof Error ? err.message : t.account.markFailed);
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  async function reopen(item: PropertyCard) {
+    if (!token) return;
+    setListingError("");
+    setReopeningId(item.id);
+    try {
+      await api.updateProperty(item.id, { status: "published" }, token);
+      propertiesPage.setItems((current) => current.map((row) => row.id === item.id ? { ...row, status: "published" } : row));
+    } catch (err) {
+      setListingError(err instanceof Error ? err.message : t.account.markFailed);
+    } finally {
+      setReopeningId(null);
+    }
+  }
 
   async function removeListing() {
     if (!token || !pendingDelete) return;
@@ -825,6 +973,7 @@ export function ProfileScreen({
             </Pressable>
             {language.modal}
             <Text style={{ marginTop: 28, marginBottom: 12, fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.account.myProperties}</Text>
+            {listingError ? <Text style={[styles.error, { marginBottom: 12 }]}>{listingError}</Text> : null}
             {loading ? <PropertyGridSkeleton width={cardWidth} /> : null}
             {!loading && properties.length === 0 ? <Text style={{ color: colors.muted }}>{t.account.noneListed}</Text> : null}
             {!loading && properties.length > 0 ? (
@@ -839,6 +988,16 @@ export function ProfileScreen({
                     footer={
                       <View style={{ marginTop: 8, gap: 6 }}>
                         {propertyActions(item, onEdit, (row) => { setDeleteError(""); setPendingDelete(row); })}
+                        {item.status === "published" ? (
+                          <Pressable onPress={() => { setCloseError(""); setPendingClose(item); }} style={{ borderRadius: 14, borderWidth: 1.5, borderColor: colors.warning, paddingVertical: 6, alignItems: "center" }}>
+                            <Text style={{ color: colors.warning, fontWeight: "700", fontSize: 12 }}>{item.listing_type === "sale" ? t.account.markSold : t.account.markRented}</Text>
+                          </Pressable>
+                        ) : null}
+                        {(item.status === "sold" || item.status === "rented") && stillListed(item) ? (
+                          <Pressable onPress={() => void reopen(item)} disabled={reopeningId === item.id} style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 6, alignItems: "center", opacity: reopeningId === item.id ? 0.7 : 1 }}>
+                            <Text style={{ color: colors.white, fontWeight: "700", fontSize: 12 }}>{reopeningId === item.id ? t.common.pleaseWait : t.account.listAgain}</Text>
+                          </Pressable>
+                        ) : null}
                         {item.status !== "published" ? (
                           <View style={{ alignSelf: "flex-start", backgroundColor: "#F8EEDD", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
                             <Text style={{ color: colors.warning, fontWeight: "700", fontSize: 12 }}>{statusLabel(item.status)}</Text>
@@ -859,6 +1018,15 @@ export function ProfileScreen({
             error={deleteError}
             onCancel={() => { if (!deleting) { setPendingDelete(null); setDeleteError(""); } }}
             onConfirm={() => void removeListing()}
+          />
+        ) : null}
+        {pendingClose ? (
+          <MarkClosedDialog
+            item={pendingClose}
+            busy={closing}
+            error={closeError}
+            onCancel={() => { if (!closing) { setPendingClose(null); setCloseError(""); } }}
+            onConfirm={() => void markClosed()}
           />
         ) : null}
       </ScrollView>
