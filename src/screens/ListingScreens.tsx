@@ -432,6 +432,16 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
     navigation.goBack();
   }
 
+  function publishButtonLabel() {
+    const badge = propertyId ? savedBadge : listingBadge;
+    const term = propertyId ? savedTerm : listingTerm;
+    const due = amountDue(listingStatus, expiresAt, badge, term, savedBadge, savedTerm);
+    const needsPay = listingNeedsPayment(listingStatus, expiresAt, badge, term, savedBadge, savedTerm) && due > 0;
+    if (!needsPay) return t.common.save;
+    if ((walletBalance ?? 0) < due) return fill(t.listing.payNow, { amount: due });
+    return fill(t.listing.useWallet, { amount: due });
+  }
+
   const closeButton = (
     <Pressable onPress={closeListing} hitSlop={8} style={{ width: 46, height: 46, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}>
       <Ionicons name="close" size={24} color={colors.ink} />
@@ -693,7 +703,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
           <Text style={{ fontWeight: "700", color: colors.primary }}>{step === 0 ? t.common.cancel : t.common.back}</Text>
         </Pressable>
         <Pressable onPress={next} disabled={busy} style={({ pressed }) => ({ flex: 1, backgroundColor: pressed ? colors.primaryDark : green, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
-          <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? t.common.pleaseWait : step === 7 ? (listingNeedsPayment(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) && amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) > 0 ? fill(t.listing.useWallet, { amount: amountDue(listingStatus, expiresAt, propertyId ? savedBadge : listingBadge, propertyId ? savedTerm : listingTerm, savedBadge, savedTerm) }) : t.common.save) : t.common.next}</Text>
+          <Text style={{ color: colors.white, fontWeight: "700" }}>{busy ? t.common.pleaseWait : step === 7 ? publishButtonLabel() : t.common.next}</Text>
         </Pressable>
       </View>
     </KeyboardScreen>

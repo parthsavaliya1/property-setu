@@ -302,6 +302,7 @@ export const en = {
     rera: "RERA Certificate",
     otherDoc: "Other Document",
     useWallet: "Use ₹{amount} from wallet",
+    payNow: "Pay ₹{amount}",
     signInPhotos: "Sign in before uploading photos.",
     signInVideo: "Sign in before uploading a video.",
     signInDocs: "Sign in before uploading documents.",

@@ -304,6 +304,7 @@ export const hi: Copy = {
     rera: "RERA प्रमाणपत्र",
     otherDoc: "अन्य दस्तावेज़",
     useWallet: "वॉलेट से ₹{amount} उपयोग करें",
+    payNow: "₹{amount} भुगतान करें",
     signInPhotos: "फ़ोटो अपलोड करने से पहले साइन इन करें।",
     signInVideo: "वीडियो अपलोड करने से पहले साइन इन करें।",
     signInDocs: "दस्तावेज़ अपलोड करने से पहले साइन इन करें।",

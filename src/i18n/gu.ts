@@ -304,6 +304,7 @@ export const gu: Copy = {
     rera: "RERA પ્રમાણપત્ર",
     otherDoc: "અન્ય દસ્તાવેજ",
     useWallet: "વૉલેટમાંથી ₹{amount} વાપરો",
+    payNow: "₹{amount} ચૂકવો",
     signInPhotos: "ફોટા અપલોડ કરતા પહેલાં સાઇન ઇન કરો.",
     signInVideo: "વિડિયો અપલોડ કરતા પહેલાં સાઇન ઇન કરો.",
     signInDocs: "દસ્તાવેજ અપલોડ કરતા પહેલાં સાઇન ઇન કરો.",
