@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { requireOptionalNativeModule } from "expo";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Pressable, StyleSheet, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from "react-native";
+import { Alert, Pressable, StyleSheet, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from "react-native";
 import { useI18n } from "../i18n";
 import { shapeSpoken, spokenKindForKeyboard, type SpokenKind } from "../lib/numbers";
 import { colors } from "../theme";
@@ -131,31 +131,34 @@ export function VoiceButton({ spoken, onValue, value, style }: VoiceProps & { va
   );
 }
 
+const layoutKeys = ["flex", "flexGrow", "flexShrink", "flexBasis", "alignSelf", "margin", "marginTop", "marginBottom", "marginLeft", "marginRight", "marginHorizontal", "marginVertical", "width", "maxWidth", "minWidth"] as const;
+
 export function VoiceTextInput({ spoken, style, onChangeText, keyboardType, multiline, ...props }: TextInputProps & { spoken?: SpokenKind }) {
   const kind = spokenKindForKeyboard(keyboardType, spoken);
   const flat = StyleSheet.flatten(style) || {};
-  const paddingLeft = flat.paddingLeft ?? flat.paddingHorizontal ?? 0;
-  const { paddingRight: _paddingRight, paddingHorizontal: _paddingHorizontal, ...box } = flat;
+  const layout: ViewStyle = {};
+  const inputStyle: TextStyle = { ...flat };
+  for (const key of layoutKeys) {
+    if (flat[key] != null) {
+      layout[key] = flat[key] as never;
+      delete inputStyle[key];
+    }
+  }
+  const paddingRight = typeof flat.paddingRight === "number" ? flat.paddingRight : typeof flat.paddingHorizontal === "number" ? flat.paddingHorizontal : 12;
+  inputStyle.paddingRight = paddingRight + 28;
   return (
-    <View style={[box, { paddingLeft, paddingRight: 4, flexDirection: "row", alignItems: multiline ? "flex-start" : "center" }]}>
+    <View style={layout}>
       <TextInput
         {...props}
         multiline={multiline}
         keyboardType={keyboardType}
         placeholderTextColor={props.placeholderTextColor}
         onChangeText={(next) => onChangeText?.(shapeSpoken(next, kind))}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          color: flat.color,
-          fontSize: flat.fontSize,
-          paddingVertical: multiline ? 0 : flat.paddingVertical,
-          minHeight: multiline && typeof flat.minHeight === "number" ? flat.minHeight - 16 : undefined,
-          textAlignVertical: multiline ? "top" : "center",
-          maxHeight: flat.maxHeight,
-        }}
+        style={inputStyle}
       />
-      <VoiceButton spoken={kind} value={typeof props.value === "string" ? props.value : ""} onValue={(next) => onChangeText?.(next)} style={{ marginTop: multiline ? 4 : 0 }} />
+      <View pointerEvents="box-none" style={{ position: "absolute", right: 2, top: 0, bottom: 0, width: 36, justifyContent: multiline ? "flex-start" : "center", paddingTop: multiline ? 6 : 0 }}>
+        <VoiceButton spoken={kind} value={typeof props.value === "string" ? props.value : ""} onValue={(next) => onChangeText?.(next)} />
+      </View>
     </View>
   );
 }

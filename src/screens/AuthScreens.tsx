@@ -16,6 +16,7 @@ import { buttonShadow, colors } from "../theme";
 
 const splashHouse = require("../../assets/splash-house.jpg");
 const loginBg = require("../../assets/login-bg.jpg");
+const brandLogo = require("../../assets/center-logo.png");
 
 export { OnboardingScreen } from "../components/onboarding";
 
@@ -57,8 +58,7 @@ export function SplashScreen({ onDone }: { onDone: (hasSession: boolean, seen: b
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <Image source={splashHouse} style={{ position: "absolute", top: 0, left: 0, width, height }} resizeMode="cover" />
       <View style={{ flex: 1, alignItems: "center", paddingTop: insets.top + 36, paddingHorizontal: 20 }}>
-        <Ionicons name="home-outline" size={58} color="#FFFFFF" />
-        <Text style={{ marginTop: 16, color: "#FFFFFF", fontSize: 34, fontWeight: "700", letterSpacing: 0.2 }}>PropertyHub</Text>
+        <Image source={brandLogo} style={{ width: 240, height: 150 }} resizeMode="contain" />
         <Text style={{ marginTop: 8, color: "rgba(255,255,255,0.92)", fontSize: 16, fontWeight: "400" }}>Find Your Perfect Place</Text>
       </View>
       <View
