@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, Dimensions, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
+import { Animated, Dimensions, Pressable, StyleSheet, Text, View, type TextInputProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { requestScrollFocusedInput } from "./keyboard";
+import { VoiceTextInput } from "./VoiceField";
+import type { SpokenKind } from "../lib/numbers";
 import { useI18n } from "../i18n";
 import { buttonShadow, cardShadow, colors } from "../theme";
 
@@ -181,13 +183,14 @@ export function Button({ title, onPress, disabled }: { title: string; onPress: (
   );
 }
 
-export function Field({ label, ...props }: { label?: string } & TextInputProps) {
+export function Field({ label, spoken, ...props }: { label?: string; spoken?: SpokenKind } & TextInputProps) {
   const [focused, setFocused] = useState(false);
   return (
     <View style={styles.field}>
       {label ? <Text style={[styles.label, focused && { color: colors.primary }]}>{label}</Text> : null}
-      <TextInput
+      <VoiceTextInput
         placeholderTextColor={colors.faint}
+        spoken={spoken}
         {...props}
         onFocus={(event) => {
           setFocused(true);

@@ -5,11 +5,13 @@ import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Animated, Dimensions, Image, Pressable, StatusBar, Text, TextInput, View, type TextInputProps } from "react-native";
 import { KeyboardScreen } from "../components/keyboard";
+import { VoiceButton, VoiceTextInput } from "../components/VoiceField";
 import { styles } from "../components/ui";
 import { LanguageButton, useLanguagePicker } from "../components/LanguagePicker";
 import { useAuth } from "../context/AuthContext";
 import { fill } from "../i18n/format";
 import { useI18n } from "../i18n";
+import { convertIndicDigits } from "../lib/numbers";
 import { buttonShadow, colors } from "../theme";
 
 const splashHouse = require("../../assets/splash-house.jpg");
@@ -104,7 +106,7 @@ export function LoginScreen({ onBrowse, onPrivacy }: { onBrowse: () => void; onP
   }, [secondsLeft]);
 
   function digits(value: string, max: number) {
-    return value.replace(/\D/g, "").slice(0, max);
+    return convertIndicDigits(value).replace(/\D/g, "").slice(0, max);
   }
 
   function switchMode(next: "login" | "signup") {
@@ -277,7 +279,10 @@ function OtpCode({ value, onChange }: { value: string; onChange: (value: string)
   const { t } = useI18n();
   return (
     <View style={{ marginTop: 16 }}>
-      <Text style={{ color: colors.ink, fontWeight: "600", marginBottom: 8, fontSize: 14 }}>{t.auth.otp}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <Text style={{ color: colors.ink, fontWeight: "600", fontSize: 14 }}>{t.auth.otp}</Text>
+        <VoiceButton spoken="digits" value={value} onValue={onChange} />
+      </View>
       <View style={{ height: 52 }}>
         <View style={{ flexDirection: "row", gap: 8 }}>
           {Array.from({ length: OTP_LENGTH }, (_, index) => {
@@ -309,7 +314,7 @@ function AuthField({ label, ...props }: { label: string } & TextInputProps) {
   return (
     <View style={{ marginTop: 16 }}>
       <Text style={{ color: focused ? colors.primary : colors.ink, fontWeight: "600", marginBottom: 8, fontSize: 14 }}>{label}</Text>
-      <TextInput
+      <VoiceTextInput
         placeholderTextColor={colors.faint}
         {...props}
         onFocus={(event) => {

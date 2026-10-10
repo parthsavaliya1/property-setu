@@ -3,9 +3,10 @@ import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Image, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Image, Linking, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardScreen, useKeyboardOverlap } from "../components/keyboard";
+import { VoiceTextInput } from "../components/VoiceField";
 import { io, type Socket } from "socket.io-client";
 import { ListSkeleton } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
@@ -500,7 +501,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
           <Pressable onPress={() => setAttachOpen((open) => !open)} disabled={sending} hitSlop={6} style={{ width: 40, height: 48, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name={attachOpen ? "close" : "attach"} size={24} color={colors.muted} />
           </Pressable>
-          <TextInput
+          <VoiceTextInput
             value={draft}
             onChangeText={setDraft}
             placeholder={sending ? t.chat.sending : t.chat.message}

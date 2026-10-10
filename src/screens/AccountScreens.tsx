@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput } from "../components/keyboard";
+import { VoiceTextInput } from "../components/VoiceField";
 import { PropertyGridCard, propertyGridCardWidth, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, EmptyState, Field, ListSkeleton, PageHeader, PropertyGridSkeleton, styles } from "../components/ui";
@@ -159,7 +160,7 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
           <Text style={{ color: colors.muted, marginTop: 8 }}>{t.account.walletHint}</Text>
         </View>
         <Text style={{ fontWeight: "800", color: colors.ink, marginTop: 24, marginBottom: 8 }}>{t.account.addMoney}</Text>
-        <TextInput value={amount} onChangeText={setAmount} onFocus={requestScrollFocusedInput} keyboardType="number-pad" placeholder={t.account.amountPlaceholder} placeholderTextColor={colors.faint} style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, height: 52, color: colors.ink }} />
+        <VoiceTextInput value={amount} onChangeText={setAmount} onFocus={requestScrollFocusedInput} keyboardType="number-pad" spoken="amount" placeholder={t.account.amountPlaceholder} placeholderTextColor={colors.faint} style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, height: 52, color: colors.ink }} />
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
           {walletAmounts.map((value) => {
             const selected = amount === String(value);
@@ -1062,7 +1063,7 @@ export function EditProfileScreen() {
         <View style={{ backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 12 }}>
           {saved ? <Text style={styles.ok}>{saved}</Text> : null}
           <Field label={t.account.name} value={fullName} onChangeText={setFullName} />
-          <Field label={t.account.phone} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+          <Field label={t.account.phone} value={phone} onChangeText={setPhone} keyboardType="phone-pad" spoken="digits" />
           <Field label={t.listing.city} value={city} onChangeText={setCity} />
           <Button title={t.common.save} onPress={save} />
         </View>

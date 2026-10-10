@@ -3,9 +3,11 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
 import { useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput, useKeyboardOverlap } from "../components/keyboard";
+import { VoiceTextInput } from "../components/VoiceField";
+import type { SpokenKind } from "../lib/numbers";
 import { PageHeader, SkeletonBlock, styles } from "../components/ui";
 import { useRazorpay } from "../components/RazorpayCheckout";
 import { useAuth } from "../context/AuthContext";
@@ -13,7 +15,7 @@ import { useI18n } from "../i18n";
 import { getCopy, getLocale } from "../i18n/active";
 import { fill } from "../i18n/format";
 import { amenityName, featureName, furnishingName, kindName, possessionName } from "../i18n/labels";
-import { api, inr, listingPrice, upgradeCharge, uploadMedia } from "../lib/api";
+import { api, extractListingPhoto, inr, listingPrice, upgradeCharge, uploadMedia, type ListingDraft } from "../lib/api";
 import { readCurrentPlace } from "../lib/location";
 import { buttonShadow, colors } from "../theme";
 import type { PropertyDetail } from "../types/database";
@@ -149,7 +151,9 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   const [docs, setDocs] = useState<Record<string, string>>({});
   const [video, setVideo] = useState("");
   const [error, setError] = useState("");
+  const [filledNotice, setFilledNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
   const [opening, setOpening] = useState(Boolean(propertyId));
   const [locating, setLocating] = useState(false);
 
@@ -201,6 +205,58 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       setExpiresAt(item.expires_at ?? null);
     }).catch((err) => setError(err instanceof Error ? err.message : t.listing.openFailed)).finally(() => setOpening(false));
   }, [propertyId, auth.token]);
+
+  function applyDraft(draft: ListingDraft) {
+    if (draft.category_slug && kinds.some((item) => item.slug === draft.category_slug)) setCategorySlug(draft.category_slug);
+    if (draft.listing_type && listings.some((item) => item.id === draft.listing_type)) setListingType(draft.listing_type);
+    if (draft.title) setTitle(draft.title);
+    if (draft.description) setDescription(draft.description);
+    if (draft.address) setAddress(draft.address);
+    if (draft.city) setCity(draft.city);
+    if (draft.locality) setLocality(draft.locality);
+    if (draft.pincode) setPincode(draft.pincode);
+    if (draft.bedrooms != null) setBedrooms(String(draft.bedrooms));
+    if (draft.bathrooms != null) setBathrooms(String(draft.bathrooms));
+    if (draft.balconies != null) setBalconies(String(draft.balconies));
+    if (draft.area != null) setArea(String(draft.area));
+    if (draft.furnishing_status) setFurnishing(draft.furnishing_status);
+    if (draft.construction_year != null) setYear(String(draft.construction_year));
+    if (draft.possession_status) setPossession(draft.possession_status);
+    if (draft.price != null) setPrice(String(draft.price));
+    if (draft.price_unit) setPriceUnit(draft.price_unit);
+    if (draft.is_price_negotiable != null) setNegotiable(draft.is_price_negotiable);
+    setPickedAmenitySlugs(draft.amenity_slugs.filter((slug) => amenityChoices.some((item) => item.slug === slug)));
+    setPickedFeatures(draft.features.filter((feature) => featureChoices.includes(feature)));
+  }
+
+  async function fillFromPhoto() {
+    if (!auth.token) {
+      setError(t.listing.signInPhotoRead);
+      return;
+    }
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError(t.listing.photoPermission);
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    setReading(true);
+    setBusy(true);
+    setError("");
+    setFilledNotice("");
+    try {
+      const draft = await extractListingPhoto(asset.uri, auth.token, asset.fileName, asset.mimeType);
+      applyDraft(draft);
+      setFilledNotice(t.listing.filledFromPhoto);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.listing.photoReadFailed);
+    } finally {
+      setReading(false);
+      setBusy(false);
+    }
+  }
 
   async function pickPhoto() {
     if (!auth.token) {
@@ -485,6 +541,12 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
         {step === 0 && (
           <View>
+            <Pressable onPress={fillFromPhoto} disabled={reading} style={{ marginTop: 16, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, minHeight: 52, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, paddingHorizontal: 14, opacity: reading ? 0.6 : 1 }}>
+              <Ionicons name="scan-outline" size={20} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontWeight: "700" }}>{reading ? t.listing.readingPhoto : t.listing.fillFromPhoto}</Text>
+            </Pressable>
+            <Text style={{ color: "#8a918c", textAlign: "center", marginTop: 8, lineHeight: 18 }}>{t.listing.fillFromPhotoHint}</Text>
+            {filledNotice ? <Text style={{ color: green, fontWeight: "700", textAlign: "center", marginTop: 8 }}>{filledNotice}</Text> : null}
             <Text style={{ fontSize: 22, fontWeight: "800", textAlign: "center", marginVertical: 18, color: colors.ink }}>{t.listing.what}</Text>
             <View style={{ gap: 12 }}>
               {[0, 1, 2].map((row) => (
@@ -549,7 +611,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Label text={t.listing.title} />
             <Input value={title} onChangeText={setTitle} placeholder={t.listing.titlePlaceholder} />
             <Label text={t.listing.description} />
-            <TextInput value={description} onChangeText={setDescription} onFocus={requestScrollFocusedInput} placeholder={t.listing.descriptionPlaceholder} placeholderTextColor="#b0b6b1" multiline style={[box, { minHeight: 90, textAlignVertical: "top" }]} />
+            <VoiceTextInput value={description} onChangeText={setDescription} onFocus={requestScrollFocusedInput} placeholder={t.listing.descriptionPlaceholder} placeholderTextColor="#b0b6b1" multiline style={[box, { minHeight: 90, textAlignVertical: "top" }]} />
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
                 <Label text={t.listing.bedrooms} />
@@ -567,7 +629,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
                 <Label text={t.listing.builtUp} />
-                <Input value={area} onChangeText={setArea} placeholder={t.listing.areaValuePlaceholder} keyboardType="number-pad" />
+                <Input value={area} onChangeText={setArea} placeholder={t.listing.areaValuePlaceholder} keyboardType="number-pad" spoken="amount" />
               </View>
               <Choice label={t.listing.furnishing} value={furnishing} placeholder={t.listing.select} options={["furnished", "semi_furnished", "unfurnished"]} format={furnishingName} onChange={setFurnishing} />
             </View>
@@ -605,7 +667,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
           <View>
             <Text style={heading}>{t.listing.pricing}</Text>
             <Label text={t.listing.price} />
-            <Input value={price} onChangeText={setPrice} placeholder={t.listing.pricePlaceholder} keyboardType="number-pad" />
+            <Input value={price} onChangeText={setPrice} placeholder={t.listing.pricePlaceholder} keyboardType="number-pad" spoken="amount" />
             <Label text={t.listing.priceUnit} />
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
               <Pressable onPress={() => setPriceUnit("total")} style={{ flex: 1, backgroundColor: priceUnit === "total" ? green : colors.card, borderRadius: 14, borderWidth: 1, borderColor: priceUnit === "total" ? green : colors.line, height: 52, alignItems: "center", justifyContent: "center" }}>
@@ -620,9 +682,9 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
               <Text style={{ fontWeight: "700" }}>{t.listing.negotiable}</Text>
             </Pressable>
             <Label text={t.listing.maintenance} />
-            <Input value={maintenance} onChangeText={setMaintenance} placeholder={t.listing.amountPlaceholder} keyboardType="number-pad" />
+            <Input value={maintenance} onChangeText={setMaintenance} placeholder={t.listing.amountPlaceholder} keyboardType="number-pad" spoken="amount" />
             <Label text={t.listing.deposit} />
-            <Input value={deposit} onChangeText={setDeposit} placeholder={t.listing.amountPlaceholder} keyboardType="number-pad" />
+            <Input value={deposit} onChangeText={setDeposit} placeholder={t.listing.amountPlaceholder} keyboardType="number-pad" spoken="amount" />
             <Label text={t.listing.plan} />
             <Text style={{ color: "#8a918c", marginBottom: 10 }}>{propertyId ? t.listing.planLocked : fill(t.listing.planHint, { balance: walletBalance == null ? "..." : inr(walletBalance) })}</Text>
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, opacity: propertyId ? 0.55 : 1 }} pointerEvents={propertyId ? "none" : "auto"}>
@@ -717,9 +779,9 @@ function Label({ text, focused }: { text: string; focused?: boolean }) {
   return <Text style={{ color: focused ? colors.primary : colors.ink, fontWeight: "600", marginBottom: 6 }}>{text}</Text>;
 }
 
-function Input({ value, onChangeText, placeholder, keyboardType }: { value: string; onChangeText: (value: string) => void; placeholder: string; keyboardType?: "default" | "number-pad" }) {
+function Input({ value, onChangeText, placeholder, keyboardType, spoken }: { value: string; onChangeText: (value: string) => void; placeholder: string; keyboardType?: "default" | "number-pad"; spoken?: SpokenKind }) {
   const [focused, setFocused] = useState(false);
-  return <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.faint} keyboardType={keyboardType} onFocus={() => { setFocused(true); requestScrollFocusedInput(); }} onBlur={() => setFocused(false)} style={[box, focused && { borderColor: colors.primary }]} />;
+  return <VoiceTextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.faint} keyboardType={keyboardType} spoken={spoken} onFocus={() => { setFocused(true); requestScrollFocusedInput(); }} onBlur={() => setFocused(false)} style={[box, focused && { borderColor: colors.primary }]} />;
 }
 
 function Choice({ label, value, placeholder, options, format, onChange }: { label: string; value: string; placeholder?: string; options: string[]; format?: (value: string) => string; onChange: (value: string) => void }) {
@@ -845,7 +907,7 @@ export function ScheduleScreen({ id, onDone }: { id: string; onDone: () => void 
         </View>
 
         <Text style={{ color: colors.ink, fontWeight: "800", fontSize: 16, marginTop: 22, marginBottom: 10 }}>Message</Text>
-        <TextInput value={notes} onChangeText={setNotes} onFocus={requestScrollFocusedInput} placeholder={t.listing.notesPlaceholder} placeholderTextColor={colors.faint} multiline style={{ minHeight: 110, textAlignVertical: "top", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 15 }} />
+        <VoiceTextInput value={notes} onChangeText={setNotes} onFocus={requestScrollFocusedInput} placeholder={t.listing.notesPlaceholder} placeholderTextColor={colors.faint} multiline style={{ minHeight: 110, textAlignVertical: "top", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 15 }} />
         {error ? <Text style={[styles.error, { marginTop: 12 }]}>{error}</Text> : null}
         <Pressable onPress={submit} disabled={busy} style={({ pressed }) => ({ marginTop: 22, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1, ...buttonShadow })}>
           <Text style={{ color: colors.white, fontWeight: "700", fontSize: 16 }}>{busy ? t.common.requesting : t.listing.requestVisit}</Text>

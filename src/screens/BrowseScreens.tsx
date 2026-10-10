@@ -2,8 +2,9 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Linking, Modal, PanResponder, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Linking, Modal, PanResponder, Pressable, RefreshControl, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { KeyboardScreen } from "../components/keyboard";
+import { VoiceTextInput } from "../components/VoiceField";
 import { PropertyGridCard, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
 import { PropertyMap } from "../components/PropertyMap";
 import { DetailSkeleton, EmptyState, PageHeader, PropertyGridSkeleton, SkeletonBlock, styles } from "../components/ui";
@@ -236,7 +237,7 @@ export function HomeScreen({
       </View>
       <View style={{ marginTop: 14, backgroundColor: colors.card, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, height: 52, borderWidth: 1, borderColor: colors.line }}>
         <Ionicons name="search" size={18} color={colors.primary} />
-        <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => { const next = query; setQuery(""); onSearch(next || "all"); }} placeholder={t.home.searchPlaceholder} placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
+        <VoiceTextInput value={query} onChangeText={setQuery} onSubmitEditing={() => { const next = query; setQuery(""); onSearch(next || "all"); }} placeholder={t.home.searchPlaceholder} placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
       </View>
       <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
     </View>
@@ -419,7 +420,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
         <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ flex: 1, borderRadius: 14, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, minHeight: 52, borderWidth: 1, borderColor: colors.line }}>
             <Ionicons name="search" size={18} color={colors.faint} />
-            <TextInput value={q} onChangeText={setQ} placeholder={t.search.placeholder} placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 15, paddingVertical: 8 }} />
+            <VoiceTextInput value={q} onChangeText={setQ} placeholder={t.search.placeholder} placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 15, paddingVertical: 8 }} />
             {q ? (
               <Pressable onPress={() => setQ("")} hitSlop={8}>
                 <Ionicons name="close-circle" size={18} color={colors.faint} />

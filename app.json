@@ -41,6 +41,14 @@
         {
           "locationWhenInUsePermission": "PropertySetu uses your location to fill the address and to show homes near you."
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "PropertySetu uses the microphone so you can fill a field by speaking.",
+          "speechRecognitionPermission": "PropertySetu turns your speech into text in the language you selected.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
       ]
     ]
   }

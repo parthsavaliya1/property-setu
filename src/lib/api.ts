@@ -108,6 +108,54 @@ export function sortForSearch(items: PropertyCard[], city: string | null | undef
   });
 }
 
+export type ListingDraft = {
+  category_slug: string | null;
+  listing_type: "sale" | "rent" | "lease" | "pg" | null;
+  title: string | null;
+  description: string | null;
+  address: string | null;
+  city: string | null;
+  locality: string | null;
+  pincode: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  balconies: number | null;
+  area: number | null;
+  furnishing_status: "unfurnished" | "semi_furnished" | "furnished" | null;
+  construction_year: number | null;
+  possession_status: "Ready to move" | "Under construction" | null;
+  price: number | null;
+  price_unit: "total" | "per_sqft" | null;
+  is_price_negotiable: boolean | null;
+  amenity_slugs: string[];
+  features: string[];
+};
+
+export async function extractListingPhoto(uri: string, token: string, name?: string | null, mime?: string | null) {
+  const filename = name || uri.split("/").pop()?.split("?")[0] || "poster.jpg";
+  const lower = filename.toLowerCase();
+  const type = mime || (lower.endsWith(".png") ? "image/png" : lower.endsWith(".webp") ? "image/webp" : "image/jpeg");
+  const source = new File(uri);
+  const form = new FormData();
+  form.append("file", { name: filename, type, bytes: () => source.bytes() } as unknown as Blob);
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase()}/api/properties/extract-from-image`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Could not connect";
+    throw new Error(`Could not read the photo. ${reason}`);
+  }
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error((body as { error?: string }).error || "Could not read the photo.");
+  const draft = (body as { draft?: ListingDraft }).draft;
+  if (!draft) throw new Error("Could not read the photo.");
+  return draft;
+}
+
 export async function uploadMedia(
   uri: string,
   token: string,
