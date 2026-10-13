@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { api, type AuthUser } from "../lib/api";
+import { registerPushToken } from "../lib/push";
 import { startGoogleSignIn } from "../lib/google";
 import { loadRemoteConfig, subscribeRemoteSettings } from "../lib/remoteConfig";
 import type { Me } from "../types/database";
@@ -87,6 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshMe().catch(() => setMe(null));
+    const token = session?.access_token;
+    if (token) registerPushToken(token).catch(() => undefined);
   }, [session?.access_token]);
 
   async function store(next: AppSession) {

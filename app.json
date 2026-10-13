@@ -14,7 +14,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.propertyhub.app"
+      "bundleIdentifier": "com.propertyhub.app",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "PropertySetu turns your speech into text in the language you selected.",
+        "NSMicrophoneUsageDescription": "PropertySetu uses the microphone so you can fill a field by speaking."
+      }
     },
     "android": {
       "package": "com.propertyhub.app",
@@ -23,7 +27,14 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/app-icon.png",
         "backgroundColor": "#F7F3EC"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -43,13 +54,28 @@
         }
       ],
       [
+        "expo-notifications",
+        {
+          "mode": "production",
+          "defaultChannel": "default"
+        }
+      ],
+      [
         "expo-speech-recognition",
         {
           "microphonePermission": "PropertySetu uses the microphone so you can fill a field by speaking.",
           "speechRecognitionPermission": "PropertySetu turns your speech into text in the language you selected.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "fd752e83-5bbd-4342-9f0a-9526897c3f95"
+      }
+    },
+    "owner": "parthsavaliya11"
   }
 }

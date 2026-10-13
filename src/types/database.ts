@@ -138,7 +138,7 @@ export type PropertyCard = Property & {
   state?: string | null;
   cover_image?: string | null;
   listing_label?: string | null;
-  listing_term?: "month" | "year" | null;
+  listing_term?: "month" | "year" | "trial" | null;
   is_favorite?: boolean;
   owner_name?: string | null;
   owner_phone?: string | null;

@@ -138,6 +138,8 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   const [listingBadge, setListingBadge] = useState<"standard" | "premium">("standard");
   const [listingTerm, setListingTerm] = useState<"month" | "year">("month");
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [freeAvailable, setFreeAvailable] = useState(false);
+  const [trial, setTrial] = useState(false);
   const [savedId, setSavedId] = useState(propertyId);
   const [listingStatus, setListingStatus] = useState("");
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -164,6 +166,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   useEffect(() => {
     if (!auth.token) return;
     api.wallet(auth.token).then((wallet) => setWalletBalance(wallet.balance)).catch(() => undefined);
+    api.freeListing(auth.token).then((offer) => setFreeAvailable(offer.available)).catch(() => setFreeAvailable(false));
   }, [auth.token]);
 
   useEffect(() => {
@@ -195,6 +198,8 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       setVideo(clip?.image_url || "");
       setPickedAmenitySlugs((item.amenities || []).map((amenity) => amenity.slug).filter((slug) => amenityChoices.some((choice) => choice.slug === slug)));
       setPickedFeatures((item.features || []).map((feature) => feature.feature_key).filter((key) => featureChoices.includes(key)));
+      const onTrial = item.listing_term === "trial";
+      setTrial(onTrial);
       const badge = item.listing_label === "Premium" || item.is_premium ? "premium" : "standard";
       const term = item.listing_term === "year" ? "year" : "month";
       setListingBadge(badge);
@@ -351,6 +356,35 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
     }
   }
 
+  function listingIsLive() {
+    return listingStatus === "published" && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
+  }
+
+  function chosenPlan() {
+    return {
+      badge: propertyId ? savedBadge : listingBadge,
+      term: propertyId ? savedTerm : listingTerm,
+    };
+  }
+
+  function regularMonth() {
+    const plan = chosenPlan();
+    return plan.badge === "standard" && plan.term === "month";
+  }
+
+  function canPublishFree() {
+    return freeAvailable && !listingIsLive() && regularMonth();
+  }
+
+  function paymentDue() {
+    const plan = chosenPlan();
+    if (canPublishFree()) return 0;
+    if (trial && listingIsLive() && regularMonth()) return 0;
+    if (trial) return listingPrice(plan.badge, plan.term);
+    if (!listingNeedsPayment(listingStatus, expiresAt, plan.badge, plan.term, savedBadge, savedTerm)) return 0;
+    return amountDue(listingStatus, expiresAt, plan.badge, plan.term, savedBadge, savedTerm);
+  }
+
   async function publish() {
     if (!auth.token) {
       setError(t.listing.signInPublish);
@@ -380,10 +414,12 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         setAmenities(catalog);
       }
       const amenityIds = pickedAmenitySlugs.map((slug) => amenityId(slug, catalog)).filter((id): id is string => Boolean(id));
-      const badge = propertyId ? savedBadge : listingBadge;
-      const term = propertyId ? savedTerm : listingTerm;
-      const mustPay = listingNeedsPayment(listingStatus, expiresAt, badge, term, savedBadge, savedTerm);
-      const live = listingStatus === "published" && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
+      const plan = chosenPlan();
+      const badge = plan.badge;
+      const term = plan.term;
+      const free = canPublishFree();
+      const mustPay = paymentDue() > 0;
+      const live = listingIsLive();
       const payload = {
         category_slug: categorySlug,
         title: title.trim(),
@@ -433,8 +469,12 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         setSavedId(created.id);
         setListingStatus("draft");
       }
-      if (mustPay) {
-        const fee = amountDue(listingStatus, expiresAt, badge, term, savedBadge, savedTerm);
+      if (free) {
+        await api.publishFree(id, auth.token);
+        setFreeAvailable(false);
+        setTrial(true);
+      } else if (mustPay) {
+        const fee = paymentDue();
         let balance = walletBalance ?? 0;
         if (balance < fee) {
           const order = await api.walletOrder(Math.max(1, Math.ceil(fee - balance)), auth.token);
@@ -489,10 +529,9 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   }
 
   function publishButtonLabel() {
-    const badge = propertyId ? savedBadge : listingBadge;
-    const term = propertyId ? savedTerm : listingTerm;
-    const due = amountDue(listingStatus, expiresAt, badge, term, savedBadge, savedTerm);
-    const needsPay = listingNeedsPayment(listingStatus, expiresAt, badge, term, savedBadge, savedTerm) && due > 0;
+    if (canPublishFree()) return t.listing.publishFree;
+    const due = paymentDue();
+    const needsPay = due > 0;
     if (!needsPay) return t.common.save;
     if ((walletBalance ?? 0) < due) return fill(t.listing.payNow, { amount: due });
     return fill(t.listing.useWallet, { amount: due });
@@ -687,6 +726,8 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Input value={deposit} onChangeText={setDeposit} placeholder={t.listing.amountPlaceholder} keyboardType="number-pad" spoken="amount" />
             <Label text={t.listing.plan} />
             <Text style={{ color: "#8a918c", marginBottom: 10 }}>{propertyId ? t.listing.planLocked : fill(t.listing.planHint, { balance: walletBalance == null ? "..." : inr(walletBalance) })}</Text>
+            {freeAvailable ? <Text style={{ color: green, fontWeight: "700", marginBottom: 10, lineHeight: 20 }}>{t.listing.freeHint}</Text> : null}
+            {trial && expiresAt ? <Text style={{ color: green, fontWeight: "700", marginBottom: 10, lineHeight: 20 }}>{fill(t.listing.freeActive, { date: new Date(expiresAt).toLocaleDateString() })}</Text> : null}
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, opacity: propertyId ? 0.55 : 1 }} pointerEvents={propertyId ? "none" : "auto"}>
               {(["month", "year"] as const).map((option) => (
                 <Pressable key={option} disabled={Boolean(propertyId)} onPress={() => setListingTerm(option)} style={{ flex: 1, backgroundColor: listingTerm === option ? green : colors.card, borderRadius: 14, borderWidth: 1, borderColor: listingTerm === option ? green : colors.line, minHeight: 52, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 }}>

@@ -12,7 +12,7 @@ import { useFavorites } from "../context/FavoritesContext";
 import { useI18n } from "../i18n";
 import { getCopy, getLocale } from "../i18n/active";
 import { fill } from "../i18n/format";
-import { api, inr, listingPrice, PROPERTY_PAGE_SIZE } from "../lib/api";
+import { api, inr, listingPrice, PROPERTY_PAGE_SIZE, type PropertyStats } from "../lib/api";
 import { nearScrollEnd, usePagedProperties } from "../lib/paging";
 import { useRazorpay } from "../components/RazorpayCheckout";
 import { buttonShadow, colors } from "../theme";
@@ -804,6 +804,85 @@ export function VisitsScreen({ onOpen }: { onOpen: (id: string) => void }) {
   );
 }
 
+function freeDaysLeft(item: PropertyCard) {
+  if (item.listing_term !== "trial" || item.status !== "published" || !item.expires_at) return null;
+  const remaining = new Date(item.expires_at).getTime() - Date.now();
+  if (remaining <= 0) return null;
+  return Math.max(1, Math.ceil(remaining / 86400000));
+}
+
+function ListingActivity({ token }: { token: string | null }) {
+  const { t } = useI18n();
+  const locale = getLocale();
+  const [stats, setStats] = useState<PropertyStats | null>(null);
+  const [loading, setLoading] = useState(Boolean(token));
+
+  useEffect(() => {
+    if (!token) {
+      setStats(null);
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    api.propertyStats(token).then((next) => {
+      if (active) setStats(next);
+    }).catch(() => {
+      if (active) setStats(null);
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  const days = stats?.days ?? [];
+  const peak = Math.max(1, ...days.map((item) => Math.max(item.visits, item.likes)));
+
+  return (
+    <View style={{ marginTop: 16, backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16 }}>
+      <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.account.activity}</Text>
+      <Text style={{ marginTop: 4, color: colors.muted, lineHeight: 20 }}>{t.account.activityHint}</Text>
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+        <View style={{ flex: 1, backgroundColor: colors.primarySoft, borderRadius: 16, padding: 12 }}>
+          <Text style={{ color: colors.muted, fontWeight: "700" }}>{t.account.listingVisits}</Text>
+          <Text style={{ marginTop: 4, fontSize: 26, fontWeight: "800", color: colors.ink }}>{loading ? "..." : stats?.visits ?? 0}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: "#F3E4DB", borderRadius: 16, padding: 12 }}>
+          <Text style={{ color: colors.muted, fontWeight: "700" }}>{t.account.listingLikes}</Text>
+          <Text style={{ marginTop: 4, fontSize: 26, fontWeight: "800", color: colors.ink }}>{loading ? "..." : stats?.likes ?? 0}</Text>
+        </View>
+      </View>
+      <Text style={{ marginTop: 16, color: colors.muted, fontWeight: "700" }}>{t.account.lastWeek}</Text>
+      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 12, height: 108 }}>
+        {days.map((item) => {
+          const label = new Date(`${item.day}T00:00:00`).toLocaleDateString(locale, { weekday: "narrow" });
+          return (
+            <View key={item.day} style={{ flex: 1, alignItems: "center", justifyContent: "flex-end", height: 108 }}>
+              <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, height: 78 }}>
+                <View style={{ width: 8, height: Math.max(4, (item.visits / peak) * 78), borderRadius: 4, backgroundColor: colors.primary }} />
+                <View style={{ width: 8, height: Math.max(4, (item.likes / peak) * 78), borderRadius: 4, backgroundColor: "#B56A45" }} />
+              </View>
+              <Text style={{ marginTop: 6, fontSize: 11, color: colors.muted, fontWeight: "700" }}>{label}</Text>
+            </View>
+          );
+        })}
+      </View>
+      <View style={{ flexDirection: "row", gap: 14, marginTop: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
+          <Text style={{ color: colors.muted, fontWeight: "600" }}>{t.account.listingVisits}</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#B56A45" }} />
+          <Text style={{ color: colors.muted, fontWeight: "600" }}>{t.account.listingLikes}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export function ProfileScreen({
   showBack,
   onOpen,
@@ -966,6 +1045,8 @@ export function ProfileScreen({
               </View>
             </View>
 
+            <ListingActivity token={token} />
+
             <Pressable onPress={language.openPicker} style={{ marginTop: 16, backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 16, paddingVertical: 14, flexDirection: "row", alignItems: "center", gap: 12 }}>
               <Ionicons name="language-outline" size={22} color={colors.primary} />
               <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink }}>{t.common.language}</Text>
@@ -998,6 +1079,11 @@ export function ProfileScreen({
                           <Pressable onPress={() => void reopen(item)} disabled={reopeningId === item.id} style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 6, alignItems: "center", opacity: reopeningId === item.id ? 0.7 : 1 }}>
                             <Text style={{ color: colors.white, fontWeight: "700", fontSize: 12 }}>{reopeningId === item.id ? t.common.pleaseWait : t.account.listAgain}</Text>
                           </Pressable>
+                        ) : null}
+                        {freeDaysLeft(item) != null ? (
+                          <View style={{ alignSelf: "flex-start", backgroundColor: colors.primarySoft, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+                            <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>{fill(t.account.freeDays, { days: freeDaysLeft(item) ?? 0 })}</Text>
+                          </View>
                         ) : null}
                         {item.status !== "published" ? (
                           <View style={{ alignSelf: "flex-start", backgroundColor: "#F8EEDD", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -1089,6 +1175,8 @@ function dayLabel(value: string) {
 
 function noticeVisual(type: string) {
   const text = getCopy().account;
+  if (type === "saved_search") return { icon: "search-outline" as const, bg: colors.primarySoft, color: colors.primary, chip: text.searchChip };
+  if (type === "property_view") return { icon: "eye-outline" as const, bg: colors.primarySoft, color: colors.primary, chip: text.viewedChip };
   if (type === "new_inquiry") return { icon: "chatbubble-ellipses-outline" as const, bg: colors.primarySoft, color: colors.primaryDark, chip: text.enquiryChip };
   if (type === "visit_confirmed") return { icon: "checkmark-circle-outline" as const, bg: "#E7F0EA", color: colors.success, chip: text.visitChip };
   return { icon: "calendar-outline" as const, bg: "#F8EEDD", color: colors.warning, chip: text.visitChip };

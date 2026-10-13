@@ -10,6 +10,7 @@ import { buttonShadow, colors } from "./theme";
 import { useAuth } from "./context/AuthContext";
 import { useI18n } from "./i18n";
 import { getRemoteSettings } from "./lib/remoteConfig";
+import { subscribePushOpens } from "./lib/push";
 import { EditProfileScreen, FavoritesScreen, InquiriesScreen, MenuScreen, MyPropertiesScreen, NotificationsScreen, PaymentHistoryScreen, ProfileScreen, VisitsScreen, WalletScreen } from "./screens/AccountScreens";
 import { AboutScreen } from "./screens/AboutScreen";
 import { PrivacyScreen } from "./screens/PrivacyScreen";
@@ -245,6 +246,14 @@ export function RootNavigation() {
   const [start, setStart] = useState<keyof RootStackParamList | null>(null);
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
 
+  useEffect(() => subscribePushOpens((data) => {
+    if (!navigationRef.isReady()) return;
+    if (data.kind === "saved_search") navigationRef.navigate("Main", { screen: "Search" });
+    else if (data.kind === "visit") navigationRef.navigate("Visits");
+    else if (data.kind === "message" && data.conversationId) navigationRef.navigate("Chat", { conversationId: data.conversationId });
+    else if (data.kind === "inquiry" || data.kind === "message") navigationRef.navigate("Inquiries");
+  }), []);
+
   useEffect(() => {
     if (!session || !navigationRef.isReady()) return;
     const current = navigationRef.getCurrentRoute()?.name;
@@ -295,7 +304,7 @@ export function RootNavigation() {
             {() => <MenuRoute />}
           </Stack.Screen>
           <Stack.Screen name="Map">{() => <MapScreen onOpen={openDetails} showBack />}</Stack.Screen>
-          <Stack.Screen name="Details">{({ route }) => <DetailsScreen id={route.params?.id || ""} onSchedule={(id) => navigationRef.navigate("Schedule", { id })} onChat={(id) => navigationRef.navigate("Chat", { propertyId: id })} />}</Stack.Screen>
+          <Stack.Screen name="Details">{({ route }) => <DetailsScreen id={route.params?.id || ""} onSchedule={(id) => navigationRef.navigate("Schedule", { id })} onChat={(id) => navigationRef.navigate("Chat", { propertyId: id })} onEdit={(id) => navigationRef.navigate("Add", { id })} onInquiries={() => navigationRef.navigate("Inquiries")} onMessages={() => navigationRef.navigate("Chats")} />}</Stack.Screen>
           <Stack.Screen name="Add">{({ route }) => session ? <AddScreen propertyId={route.params?.id} onDone={() => navigationRef.reset({ index: 0, routes: [{ name: "Main" }] })} /> : <LoginScreen onBrowse={() => navigationRef.navigate("Main")} onPrivacy={() => navigationRef.navigate("Privacy")} />}</Stack.Screen>
           <Stack.Screen name="Schedule">{({ route }) => <ScheduleScreen id={route.params?.id || ""} onDone={() => navigationRef.navigate("Visits")} />}</Stack.Screen>
           <Stack.Screen name="MyProperties">{() => <MyPropertiesScreen onOpen={openDetails} onEdit={(id) => navigationRef.navigate("Add", { id })} />}</Stack.Screen>

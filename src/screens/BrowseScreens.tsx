@@ -2,6 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Linking, Modal, PanResponder, Pressable, RefreshControl, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { KeyboardScreen } from "../components/keyboard";
 import { VoiceTextInput } from "../components/VoiceField";
@@ -14,7 +15,7 @@ import { getCopy } from "../i18n/active";
 import { fill } from "../i18n/format";
 import { amenityName } from "../i18n/labels";
 import { useFavorites } from "../context/FavoritesContext";
-import { api, cityName, inr, listingLabel, PROPERTY_PAGE_SIZE, sortForSearch } from "../lib/api";
+import { api, cityName, inr, listingLabel, PROPERTY_PAGE_SIZE, sortForSearch, type SavedSearch } from "../lib/api";
 import { nearScrollEnd, usePagedProperties } from "../lib/paging";
 import { useBrowseCity } from "../lib/location";
 import { useRequireLogin } from "../context/LoginGate";
@@ -370,6 +371,34 @@ export function HomeScreen({
   );
 }
 
+const RECENT_SEARCH_KEY = "propertyhub.recentSearches";
+
+function searchSignature(item: Pick<SavedSearch, "q" | "city" | "listing_type" | "category_slug" | "min_price" | "max_price" | "bedrooms">) {
+  return [
+    item.q || "",
+    item.city || "",
+    item.listing_type || "",
+    item.category_slug || "",
+    item.min_price ?? "",
+    item.max_price ?? "",
+    item.bedrooms ?? "",
+  ].join("|").toLowerCase();
+}
+
+async function readLocalSearches() {
+  try {
+    const raw = await AsyncStorage.getItem(RECENT_SEARCH_KEY);
+    const parsed = raw ? JSON.parse(raw) as SavedSearch[] : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeLocalSearches(items: SavedSearch[]) {
+  await AsyncStorage.setItem(RECENT_SEARCH_KEY, JSON.stringify(items.slice(0, 8)));
+}
+
 export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; onOpen: (id: string) => void }) {
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
@@ -387,6 +416,12 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   const [withPhotos, setWithPhotos] = useState(false);
   const [sort, setSort] = useState("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [savedCity, setSavedCity] = useState("");
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedRef = useRef(savedSearches);
+  savedRef.current = savedSearches;
   const loadSearchPage = useCallback((offset: number) => {
     const params = new URLSearchParams({
       limit: String(PROPERTY_PAGE_SIZE),
@@ -400,18 +435,59 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     if (range?.min != null) params.set("min_price", String(range.min));
     if (range?.max != null) params.set("max_price", String(range.max));
     if (bedrooms) params.set("bedrooms", bedrooms === "4" ? "4" : bedrooms);
-    if (nearCity) {
-      params.set("prefer_city", nearCity);
+    const city = savedCity || nearCity;
+    if (city) {
+      params.set("prefer_city", city);
       params.set("city_first", "true");
     }
     return api.properties(`?${params.toString()}`, token);
-  }, [bedrooms, category, listing, nearCity, price, propertyType, q, token]);
+  }, [bedrooms, category, listing, nearCity, price, propertyType, q, savedCity, token]);
 
   const searchPage = usePagedProperties(
     loadSearchPage,
-    `${q}|${listing}|${category}|${propertyType}|${price}|${bedrooms}|${nearCity}|${token || ""}`,
+    `${q}|${listing}|${category}|${propertyType}|${price}|${bedrooms}|${savedCity || nearCity}|${token || ""}`,
   );
   const { items, loading, refreshing, error } = searchPage;
+
+  useEffect(() => {
+    let active = true;
+    if (!token) {
+      readLocalSearches().then((rows) => {
+        if (active) setSavedSearches(rows);
+      });
+      return () => {
+        active = false;
+      };
+    }
+    readLocalSearches().then(async (local) => {
+      for (const item of local) {
+        const listingType = item.listing_type === "sale" || item.listing_type === "rent" || item.listing_type === "lease" || item.listing_type === "pg" ? item.listing_type : undefined;
+        try {
+          await api.createSavedSearch({
+            name: item.name,
+            q: item.q || undefined,
+            city: item.city || undefined,
+            listing_type: listingType,
+            category_slug: item.category_slug || undefined,
+            min_price: item.min_price == null || item.min_price === "" ? undefined : Number(item.min_price),
+            max_price: item.max_price == null || item.max_price === "" ? undefined : Number(item.max_price),
+            bedrooms: item.bedrooms == null || item.bedrooms === "" ? undefined : Number(item.bedrooms),
+          }, token);
+        } catch {
+          /* keep going with the searches already on the account */
+        }
+      }
+      if (local.length) await writeLocalSearches([]).catch(() => undefined);
+      return api.savedSearches(token);
+    }).then((rows) => {
+      if (active) setSavedSearches(rows);
+    }).catch(() => {
+      if (active) setSavedSearches([]);
+    });
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   useEffect(() => {
     if (!initialQuery || initialQuery === "all") return;
@@ -432,7 +508,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   const shown = sortForSearch(
     [...items]
       .filter((item) => !withPhotos || Boolean(item.cover_image)),
-    nearCity || q,
+    savedCity || nearCity || q,
     sort,
   );
 
@@ -469,6 +545,98 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   };
   const filterCount = [listing || category, propertyType, price, bedrooms, withPhotos, sort !== "newest"].filter(Boolean).length;
 
+  function priceChoice(min?: number | string | null, max?: number | string | null) {
+    const low = min == null || min === "" ? null : Number(min);
+    const high = max == null || max === "" ? null : Number(max);
+    return priceRanges.find((item) => (item.min ?? null) === low && (item.max ?? null) === high)?.id ?? "";
+  }
+
+  function applySaved(item: SavedSearch) {
+    setQ(item.q || "");
+    setListing(item.listing_type || "");
+    setCategory(item.category_slug || "");
+    setPropertyType(item.category_slug || "");
+    setPrice(priceChoice(item.min_price, item.max_price));
+    setBedrooms(item.bedrooms != null && String(item.bedrooms) !== "" ? String(item.bedrooms) : "");
+    setSavedCity(item.city || "");
+  }
+
+  useEffect(() => {
+    const text = q.trim();
+    const hasFilter = Boolean(listing || propertyType || category || price || bedrooms);
+    if (text.length < 2 && !hasFilter) return;
+    const timer = setTimeout(() => {
+      void rememberSearch();
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [q, listing, category, propertyType, price, bedrooms, savedCity, token]);
+
+  async function rememberSearch() {
+    const text = q.trim();
+    const hasFilter = Boolean(listing || propertyType || category || price || bedrooms);
+    if (text.length < 2 && !hasFilter) return;
+    const range = priceRanges.find((item) => item.id === price);
+    const listingType = listing === "sale" || listing === "rent" || listing === "lease" || listing === "pg" ? listing : undefined;
+    const name = [text, listingType, propertyType || category, bedrooms ? `${bedrooms} BHK` : ""].filter(Boolean).join(" · ") || t.search.recent;
+    const next: SavedSearch = {
+      id: `local-${Date.now()}`,
+      name: name.slice(0, 80),
+      q: text || null,
+      city: savedCity || null,
+      listing_type: listingType || null,
+      category_slug: (propertyType || category) || null,
+      min_price: range?.min ?? null,
+      max_price: range?.max ?? null,
+      bedrooms: bedrooms ? Number(bedrooms) : null,
+    };
+    const signature = searchSignature(next);
+    const withoutMatch = savedRef.current.filter((item) => searchSignature(item) !== signature);
+    if (token) {
+      try {
+        const created = await api.createSavedSearch({
+          name: next.name,
+          q: text || undefined,
+          city: savedCity || undefined,
+          listing_type: listingType,
+          category_slug: next.category_slug || undefined,
+          min_price: range?.min,
+          max_price: range?.max,
+          bedrooms: bedrooms ? Number(bedrooms) : undefined,
+        }, token);
+        setSavedSearches([created, ...withoutMatch.filter((item) => item.id !== created.id)].slice(0, 8));
+        return;
+      } catch {
+        /* keep a copy on this phone if the account save does not go through */
+      }
+    }
+    const stored = [next, ...withoutMatch].slice(0, 8);
+    setSavedSearches(stored);
+    await writeLocalSearches(stored).catch(() => undefined);
+  }
+
+  async function removeSaved(id: string) {
+    const next = savedRef.current.filter((item) => item.id !== id);
+    setSavedSearches(next);
+    if (!token || id.startsWith("local-")) {
+      await writeLocalSearches(next).catch(() => undefined);
+      return;
+    }
+    try {
+      await api.deleteSavedSearch(id, token);
+    } catch {
+      api.savedSearches(token).then(setSavedSearches).catch(() => undefined);
+    }
+  }
+
+  function openSearchList() {
+    if (blurTimer.current) clearTimeout(blurTimer.current);
+    setSearchOpen(true);
+  }
+
+  function closeSearchList() {
+    blurTimer.current = setTimeout(() => setSearchOpen(false), 220);
+  }
+
   function clearFilters() {
     setListing("");
     setCategory("");
@@ -486,7 +654,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
         <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ flex: 1, borderRadius: 14, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, minHeight: 52, borderWidth: 1, borderColor: colors.line }}>
             <Ionicons name="search" size={18} color={colors.faint} />
-            <VoiceTextInput value={q} onChangeText={setQ} placeholder={t.search.placeholder} placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 15, paddingVertical: 8 }} />
+            <VoiceTextInput value={q} onChangeText={setQ} onFocus={openSearchList} onBlur={closeSearchList} onSubmitEditing={() => setSearchOpen(false)} placeholder={t.search.placeholder} placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 15, paddingVertical: 8 }} />
             {q ? (
               <Pressable onPress={() => setQ("")} hitSlop={8}>
                 <Ionicons name="close-circle" size={18} color={colors.faint} />
@@ -498,6 +666,22 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
             {filterCount ? <View style={{ position: "absolute", top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}><Text style={{ color: colors.white, fontSize: 10, fontWeight: "800" }}>{filterCount}</Text></View> : null}
           </Pressable>
         </View>
+        {searchOpen && savedSearches.length ? (
+          <View style={{ marginTop: 8, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, overflow: "hidden", ...cardShadow }}>
+            <Text style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4, color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t.search.recent}</Text>
+            {savedSearches.map((item) => (
+              <View key={item.id} style={{ flexDirection: "row", alignItems: "center", borderTopWidth: 1, borderTopColor: colors.lineSoft }}>
+                <Pressable onPress={() => { applySaved(item); setSearchOpen(false); }} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12 }}>
+                  <Ionicons name="time-outline" size={18} color={colors.faint} />
+                  <Text numberOfLines={1} style={{ flex: 1, color: colors.ink, fontWeight: "600" }}>{item.name}</Text>
+                </Pressable>
+                <Pressable onPress={() => void removeSaved(item.id)} hitSlop={8} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="close" size={18} color={colors.faint} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
         <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
       </View>
       {error ? <Text style={[styles.error, { marginHorizontal: 20, marginTop: 12 }]}>{error}</Text> : null}
@@ -779,7 +963,7 @@ function PhotoZoom({ photos, startIndex, onClose }: { photos: string[]; startInd
   );
 }
 
-export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedule: (propertyId: string) => void; onChat: (propertyId: string) => void }) {
+export function DetailsScreen({ id, onSchedule, onChat, onEdit, onInquiries, onMessages }: { id: string; onSchedule: (propertyId: string) => void; onChat: (propertyId: string) => void; onEdit: (propertyId: string) => void; onInquiries: () => void; onMessages: () => void }) {
   const { t } = useI18n();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -820,6 +1004,21 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
       active = false;
     };
   }, [id, token]);
+
+  function contactOwner(kind: "call" | "whatsapp") {
+    if (!phone) {
+      setNote(t.details.noPhone);
+      return;
+    }
+    if (token && item && item.owner_id !== session?.user.id && item.status !== "sold" && item.status !== "rented") {
+      api.inquire(item.id, {
+        inquiry_type: kind,
+        message: kind === "call" ? "Called about this property" : "Sent a WhatsApp message about this property",
+      }, token).catch(() => undefined);
+    }
+    const target = kind === "call" ? `tel:${phone}` : `https://wa.me/${phone.replace(/^\+/, "")}`;
+    Linking.openURL(target).catch(() => undefined);
+  }
 
   async function chat() {
     if (!token || !item) {
@@ -940,9 +1139,11 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
           ) : null}
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <Text style={{ flex: 1, fontSize: 22, lineHeight: 28, fontWeight: "600", color: colors.ink }}>{item.title}</Text>
+            {mine ? null : (
             <Pressable onPress={save} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: liked ? colors.primarySoft : colors.card, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center" }}>
               <Ionicons name={liked ? "heart" : "heart-outline"} size={20} color={liked ? colors.heart : colors.faint} />
             </Pressable>
+            )}
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
             <Ionicons name="location-sharp" size={15} color={colors.muted} />
@@ -1003,7 +1204,7 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
             {tab === "documents" ? (
               <View style={{ gap: 8 }}>
                 <Text style={{ color: colors.muted, lineHeight: 20 }}>{t.details.docsHint}</Text>
-                {closed ? <Text style={{ color: colors.warning, fontWeight: "700" }}>{t.details.unavailable}</Text> : <Pressable onPress={() => onSchedule(item.id)}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.details.schedule}</Text></Pressable>}
+                {mine ? null : closed ? <Text style={{ color: colors.warning, fontWeight: "700" }}>{t.details.unavailable}</Text> : <Pressable onPress={() => onSchedule(item.id)}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.details.schedule}</Text></Pressable>}
               </View>
             ) : null}
           </View>
@@ -1011,7 +1212,23 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
         </View>
       </ScrollView>
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.lineSoft, gap: 8 }}>
-        {closed ? (
+        {mine ? (
+        <>
+        <Pressable onPress={() => onEdit(item.id)} style={({ pressed }) => ({ height: 52, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
+          <Text style={{ color: colors.white, fontWeight: "700" }}>{t.listing.edit}</Text>
+        </Pressable>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+        <Pressable onPress={onInquiries} style={{ flex: 1, height: 52, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, backgroundColor: colors.card }}>
+          <Ionicons name="mail-outline" size={16} color={colors.primary} />
+          <Text style={{ fontWeight: "700", color: colors.primary }}>{t.menu.inquiries}</Text>
+        </Pressable>
+        <Pressable onPress={onMessages} style={({ pressed }) => ({ flex: 1, height: 52, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 })}>
+          <Ionicons name="chatbubble-ellipses" size={16} color="white" />
+          <Text style={{ color: "white", fontWeight: "700" }}>{t.menu.messages}</Text>
+        </Pressable>
+        </View>
+        </>
+        ) : closed ? (
           <View style={{ height: 52, borderRadius: 14, backgroundColor: "#F8EEDD", alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: colors.warning, fontWeight: "800" }}>{t.details.unavailable}</Text>
           </View>
@@ -1021,11 +1238,11 @@ export function DetailsScreen({ id, onSchedule, onChat }: { id: string; onSchedu
           <Text style={{ color: colors.white, fontWeight: "700" }}>{t.details.schedule}</Text>
         </Pressable>
         <View style={{ flexDirection: "row", gap: 8 }}>
-        <Pressable onPress={() => phone ? Linking.openURL(`tel:${phone}`) : setNote(t.details.noPhone)} style={{ flex: 0.9, height: 52, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, backgroundColor: colors.card }}>
+        <Pressable onPress={() => contactOwner("call")} style={{ flex: 0.9, height: 52, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, backgroundColor: colors.card }}>
           <Ionicons name="call-outline" size={16} color={colors.primary} />
           <Text style={{ fontWeight: "700", color: colors.primary }}>{t.common.call}</Text>
         </Pressable>
-        <Pressable onPress={() => phone ? Linking.openURL(`https://wa.me/${phone.replace(/^\+/, "")}`) : setNote(t.details.noPhone)} style={{ flex: 1.25, height: 52, backgroundColor: "#128C7E", borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 }}>
+        <Pressable onPress={() => contactOwner("whatsapp")} style={{ flex: 1.25, height: 52, backgroundColor: "#128C7E", borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 }}>
           <Ionicons name="logo-whatsapp" size={18} color="white" />
           <Text style={{ color: "white", fontWeight: "700" }}>{t.common.whatsapp}</Text>
         </Pressable>

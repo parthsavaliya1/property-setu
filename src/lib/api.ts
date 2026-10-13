@@ -316,6 +316,45 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ property_id: propertyId, listing_badge: listingBadge, term }),
     }, token),
+  freeListing: (token: string) => request<{ available: boolean }>("/me/free-listing", {}, token),
+  publishFree: (propertyId: string, token: string) =>
+    request<{ ok: boolean; free: boolean; days: number; expires_at: string }>(`/properties/${propertyId}/publish-free`, { method: "POST" }, token),
+  propertyStats: (token: string) => request<PropertyStats>("/me/property-stats", {}, token),
+  savePushToken: (tokenValue: string, platform: "ios" | "android" | "web", authToken: string) =>
+    request<void>("/me/push-token", { method: "POST", body: JSON.stringify({ token: tokenValue, platform }) }, authToken),
+  savedSearches: (token: string) => requestList<SavedSearch>("/saved-searches", {}, token),
+  createSavedSearch: (payload: SavedSearchInput, token: string) =>
+    request<SavedSearch>("/saved-searches", { method: "POST", body: JSON.stringify(payload) }, token),
+  deleteSavedSearch: (id: string, token: string) => request<void>(`/saved-searches/${id}`, { method: "DELETE" }, token),
+};
+
+export type SavedSearch = {
+  id: string;
+  name: string;
+  q?: string | null;
+  city?: string | null;
+  listing_type?: string | null;
+  category_slug?: string | null;
+  min_price?: number | string | null;
+  max_price?: number | string | null;
+  bedrooms?: number | string | null;
+};
+
+export type SavedSearchInput = {
+  name: string;
+  q?: string;
+  city?: string;
+  listing_type?: "sale" | "rent" | "lease" | "pg";
+  category_slug?: string;
+  min_price?: number;
+  max_price?: number;
+  bedrooms?: number;
+};
+
+export type PropertyStats = {
+  visits: number;
+  likes: number;
+  days: Array<{ day: string; visits: number; likes: number }>;
 };
 
 export function inr(value: string | number | null | undefined) {
