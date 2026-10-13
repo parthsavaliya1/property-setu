@@ -236,6 +236,7 @@ export const api = {
     request<{ token: string; user: AuthUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   google: (proof: { code: string; code_verifier: string; redirect_uri: string; client_id: string }) =>
     request<{ token: string; user: AuthUser }>("/auth/google", { method: "POST", body: JSON.stringify(proof) }),
+  banners: () => requestList<{ id: string; image_url: string }>("/banners"),
   categories: () => requestList<Category>("/categories"),
   amenities: () => requestList<{ id: string; name: string }>("/amenities"),
   properties: (query = "", token?: string | null) => requestList<PropertyCard>(`/properties${query}`, {}, token),

@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Linking, Modal, PanResponder, Pressable, RefreshControl, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { KeyboardScreen } from "../components/keyboard";
 import { VoiceTextInput } from "../components/VoiceField";
@@ -21,6 +21,81 @@ import { useRequireLogin } from "../context/LoginGate";
 import { buttonShadow, cardShadow, colors } from "../theme";
 import { deviceType } from "../lib/supabase";
 import type { PropertyCard, PropertyDetail } from "../types/database";
+
+const BANNER_HEIGHT = 118;
+const fallbackBanner = require("../../assets/home-banner.jpg");
+type BannerSlide = { id: string; image_url?: string; local?: boolean };
+
+function HomeBanner({ onPress }: { onPress: () => void }) {
+  const { width } = useWindowDimensions();
+  const { t } = useI18n();
+  const frameWidth = Math.max(0, width - 40);
+  const listRef = useRef<FlatList<BannerSlide>>(null);
+  const indexRef = useRef(0);
+  const [uploads, setUploads] = useState<BannerSlide[]>([]);
+  const slides = useMemo(() => [{ id: "static", local: true } as BannerSlide, ...uploads], [uploads]);
+
+  const load = useCallback(() => {
+    let active = true;
+    api.banners().then((rows) => {
+      if (!active) return;
+      setUploads(rows.filter((row) => row.image_url).map((row) => ({ id: row.id, image_url: row.image_url })));
+    }).catch(() => {
+      if (active) setUploads([]);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useFocusEffect(load);
+
+  useEffect(() => {
+    if (slides.length < 2 || frameWidth <= 0) return;
+    const timer = setInterval(() => {
+      const next = (indexRef.current + 1) % slides.length;
+      indexRef.current = next;
+      listRef.current?.scrollToOffset({ offset: next * frameWidth, animated: true });
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [slides.length, frameWidth]);
+
+  function showIndex(next: number) {
+    const safe = Math.min(Math.max(next, 0), slides.length - 1);
+    indexRef.current = safe;
+  }
+
+  return (
+    <View style={{ marginHorizontal: 20, marginTop: 24, width: frameWidth, height: BANNER_HEIGHT, borderRadius: 20, overflow: "hidden", backgroundColor: colors.secondary }}>
+      <FlatList
+        ref={listRef}
+        data={slides}
+        horizontal
+        pagingEnabled
+        bounces={false}
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.id}
+        getItemLayout={(_, itemIndex) => ({ length: frameWidth, offset: frameWidth * itemIndex, index: itemIndex })}
+        onMomentumScrollEnd={(event) => showIndex(Math.round(event.nativeEvent.contentOffset.x / frameWidth))}
+        renderItem={({ item }) => (
+          <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={t.home.dream} style={{ width: frameWidth, height: BANNER_HEIGHT }}>
+            {item.local ? <>
+              <Image source={fallbackBanner} style={{ width: frameWidth, height: BANNER_HEIGHT }} resizeMode="cover" />
+              <View style={{ position: "absolute", left: 14, top: 0, bottom: 0, width: "48%", justifyContent: "center" }}>
+                <Text numberOfLines={2} style={{ color: "white", fontSize: 16, lineHeight: 20, fontWeight: "800" }}>{t.home.dream}</Text>
+                <Text numberOfLines={1} style={{ color: "rgba(255,255,255,0.9)", marginTop: 2, fontSize: 12 }}>{t.home.dreamSub}</Text>
+                <View style={{ alignSelf: "flex-start", marginTop: 8, backgroundColor: "white", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 }}>
+                  <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>{t.home.explore}</Text>
+                </View>
+              </View>
+            </> : <Image source={{ uri: item.image_url }} style={{ width: frameWidth, height: BANNER_HEIGHT }} resizeMode="cover" />}
+          </Pressable>
+        )}
+      />
+    </View>
+  );
+}
 
 function chipText(query: string) {
   const text = getCopy();
@@ -263,16 +338,7 @@ export function HomeScreen({
           ))}
         </View>
       </View>
-      <Pressable onPress={() => onSearch("all")} style={{ marginHorizontal: 20, marginTop: 24, height: 118, borderRadius: 20, overflow: "hidden" }}>
-        <Image source={require("../../assets/home-banner.jpg")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-        <View style={{ position: "absolute", left: 14, top: 0, bottom: 0, width: "48%", justifyContent: "center" }}>
-          <Text style={{ color: "white", fontSize: 16, lineHeight: 20, fontWeight: "800" }}>{t.home.dream}</Text>
-          <Text style={{ color: "rgba(255,255,255,0.9)", marginTop: 2, fontSize: 12 }}>{t.home.dreamSub}</Text>
-          <View style={{ alignSelf: "flex-start", marginTop: 8, backgroundColor: "white", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 }}>
-            <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>{t.home.explore}</Text>
-          </View>
-        </View>
-      </Pressable>
+      <HomeBanner onPress={() => onSearch("all")} />
       {error ? <Text style={[styles.error, { margin: 16 }]}>{error}</Text> : null}
       {loading ? <View style={{ width: "100%", paddingHorizontal: 20, marginTop: 24 }}><PropertyGridSkeleton width={cardWidth} /></View> : null}
       {!loading && premiumItems.length > 0 ? (
