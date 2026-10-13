@@ -4,7 +4,7 @@ import { AppState } from "react-native";
 import { api, type AuthUser } from "../lib/api";
 import { registerPushToken } from "../lib/push";
 import { startGoogleSignIn } from "../lib/google";
-import { loadRemoteConfig, subscribeRemoteSettings } from "../lib/remoteConfig";
+import { applyServerListingSettings, loadRemoteConfig, subscribeRemoteSettings } from "../lib/remoteConfig";
 import type { Me } from "../types/database";
 
 const SESSION_KEY = "propertyhub.session";
@@ -21,7 +21,7 @@ type AuthValue = {
   me: Me | null;
   token: string | null;
   refreshMe: () => Promise<void>;
-  sendOtp: (phone: string, create: boolean) => Promise<string>;
+  sendOtp: (phone: string, create: boolean) => Promise<{ sessionId: string; demo: boolean }>;
   verifyOtp: (phone: string, otp: string, sessionId: string, create: boolean, fullName?: string) => Promise<void>;
   signInGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -40,7 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     Promise.race([
-      loadRemoteConfig(),
+      loadRemoteConfig().then(async () => {
+        const settings = await api.listingSettings();
+        applyServerListingSettings(settings);
+      }),
       new Promise((resolve) => setTimeout(resolve, 8000)),
     ])
       .catch(() => undefined)
@@ -60,7 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) setReady(true);
       });
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") loadRemoteConfig().catch(() => undefined);
+      if (state === "active") {
+        loadRemoteConfig()
+          .then(() => api.listingSettings())
+          .then((settings) => applyServerListingSettings(settings))
+          .catch(() => undefined);
+      }
     });
     const settings = subscribeRemoteSettings(() => {
       const token = sessionRef.current?.access_token;
@@ -106,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshMe,
     sendOtp: async (phone, create) => {
       const result = await api.sendOtp(phone, create);
-      return result.sessionId;
+      return { sessionId: result.sessionId, demo: result.demo === true };
     },
     verifyOtp: async (phone, otp, sessionId, create, fullName) => {
       const result = await api.verifyOtp(phone, otp, sessionId, create, fullName);

@@ -191,7 +191,9 @@ export async function uploadMedia(
 export function listingPrice(badge: "standard" | "premium", term: "month" | "year") {
   const fees = getRemoteSettings();
   const monthly = badge === "premium" ? fees.premiumPrice : fees.standardPrice;
-  return term === "year" ? Math.round(monthly * 12 * 0.85) : monthly;
+  if (term === "month") return monthly;
+  const percent = Math.min(90, Math.max(0, fees.yearlyDiscountPercent));
+  return Math.round((monthly * 12 * (100 - percent)) / 100);
 }
 
 /** Extra to collect when a live listing moves to a higher plan. The current fee is already paid. */
@@ -221,8 +223,17 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  listingSettings: () =>
+    request<{
+      standardPrice: number;
+      premiumPrice: number;
+      premiumListPrice: number;
+      premiumOfferPercent: number;
+      premiumSavings: number;
+      yearlyDiscountPercent: number;
+    }>("/listing-settings"),
   sendOtp: (phone: string, create: boolean) =>
-    request<{ message: string; sessionId: string }>("/auth/send-otp", { method: "POST", body: JSON.stringify({ phone, create }) }),
+    request<{ message: string; sessionId: string; demo?: boolean }>("/auth/send-otp", { method: "POST", body: JSON.stringify({ phone, create }) }),
   verifyOtp: (phone: string, otp: string, sessionId: string, create: boolean, fullName?: string) =>
     request<{ token: string; user: AuthUser; isNewUser: boolean }>("/auth/verify-otp", {
       method: "POST",

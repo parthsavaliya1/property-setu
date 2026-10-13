@@ -16,6 +16,7 @@ import { getCopy, getLocale } from "../i18n/active";
 import { fill } from "../i18n/format";
 import { amenityName, featureName, furnishingName, kindName, possessionName } from "../i18n/labels";
 import { api, extractListingPhoto, inr, listingPrice, upgradeCharge, uploadMedia, type ListingDraft } from "../lib/api";
+import { getRemoteSettings, subscribeRemoteSettings } from "../lib/remoteConfig";
 import { readCurrentPlace } from "../lib/location";
 import { buttonShadow, colors } from "../theme";
 import type { PropertyDetail } from "../types/database";
@@ -70,9 +71,10 @@ const listingPlans = [
 
 function planDetail(id: "standard" | "premium") {
   const text = getCopy().listing;
+  const fees = getRemoteSettings();
   const month = listingPrice(id, "month");
   const year = listingPrice(id, "year");
-  const priceText = fill(text.planPrice, { month, year });
+  const priceText = fill(text.planPrice, { month, year, percent: fees.yearlyDiscountPercent });
   return id === "premium" ? `${priceText}${text.premiumFirst}` : priceText;
 }
 
@@ -114,6 +116,8 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   const insets = useSafeAreaInsets();
   const keyboardOverlap = useKeyboardOverlap();
   const [step, setStep] = useState(0);
+  const [, setPriceTick] = useState(0);
+  useEffect(() => subscribeRemoteSettings(() => setPriceTick((value) => value + 1)), []);
   const [categorySlug, setCategorySlug] = useState("house");
   const [listingType, setListingType] = useState("sale");
   const [address, setAddress] = useState("");
@@ -725,30 +729,43 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Label text={t.listing.deposit} />
             <Input value={deposit} onChangeText={setDeposit} placeholder={t.listing.amountPlaceholder} keyboardType="number-pad" spoken="amount" />
             <Label text={t.listing.plan} />
-            <Text style={{ color: "#8a918c", marginBottom: 10 }}>{propertyId ? t.listing.planLocked : fill(t.listing.planHint, { balance: walletBalance == null ? "..." : inr(walletBalance) })}</Text>
+            <Text style={{ color: "#8a918c", marginBottom: 10 }}>{propertyId ? t.listing.planLocked : fill(t.listing.planHint, { balance: walletBalance == null ? "..." : inr(walletBalance), percent: getRemoteSettings().yearlyDiscountPercent })}</Text>
             {freeAvailable ? <Text style={{ color: green, fontWeight: "700", marginBottom: 10, lineHeight: 20 }}>{t.listing.freeHint}</Text> : null}
             {trial && expiresAt ? <Text style={{ color: green, fontWeight: "700", marginBottom: 10, lineHeight: 20 }}>{fill(t.listing.freeActive, { date: new Date(expiresAt).toLocaleDateString() })}</Text> : null}
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, opacity: propertyId ? 0.55 : 1 }} pointerEvents={propertyId ? "none" : "auto"}>
               {(["month", "year"] as const).map((option) => (
                 <Pressable key={option} disabled={Boolean(propertyId)} onPress={() => setListingTerm(option)} style={{ flex: 1, backgroundColor: listingTerm === option ? green : colors.card, borderRadius: 14, borderWidth: 1, borderColor: listingTerm === option ? green : colors.line, minHeight: 52, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 }}>
-                  <Text style={{ color: listingTerm === option ? colors.white : colors.muted, fontWeight: "700", textAlign: "center" }}>{option === "month" ? t.listing.oneMonth : t.listing.oneYear}</Text>
+                  <Text style={{ color: listingTerm === option ? colors.white : colors.muted, fontWeight: "700", textAlign: "center" }}>{option === "month" ? t.listing.oneMonth : fill(t.listing.oneYear, { percent: getRemoteSettings().yearlyDiscountPercent })}</Text>
                 </Pressable>
               ))}
             </View>
             <View style={{ opacity: propertyId ? 0.55 : 1 }} pointerEvents={propertyId ? "none" : "auto"}>
             {listingPlans.map((plan) => {
               const selected = listingBadge === plan.id;
+              const fees = getRemoteSettings();
               const full = listingPrice(plan.id, listingTerm);
               const priceNow = amountDue(listingStatus, expiresAt, plan.id, listingTerm, savedBadge, savedTerm);
               const credited = !propertyId && priceNow > 0 && priceNow < full;
+              const offer = plan.id === "premium" && fees.premiumOfferPercent > 0;
+              const listPrice = listingTerm === "year"
+                ? Math.round((fees.premiumListPrice * 12 * (100 - fees.yearlyDiscountPercent)) / 100)
+                : fees.premiumListPrice;
               return (
                 <Pressable key={plan.id} disabled={Boolean(propertyId)} onPress={() => setListingBadge(plan.id)} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: selected ? colors.primarySoft : colors.card, borderRadius: 14, borderWidth: 1, borderColor: selected ? green : colors.line, padding: 14, marginBottom: 10 }}>
                   <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={22} color={selected ? green : "#c5c5c5"} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: "800", color: colors.ink }}>{plan.id === "premium" ? t.common.premium : t.listing.regular}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <Text style={{ fontWeight: "800", color: colors.ink }}>{plan.id === "premium" ? t.common.premium : t.listing.regular}</Text>
+                      {offer ? <View style={{ backgroundColor: "#e7f6ef", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 }}><Text style={{ color: green, fontWeight: "800", fontSize: 12 }}>{fill(t.listing.premiumOffer, { percent: fees.premiumOfferPercent, amount: inr(listingTerm === "year" ? Math.max(0, listPrice - full) : fees.premiumSavings) })}</Text></View> : null}
+                    </View>
                     <Text style={{ color: "#8a918c", marginTop: 2 }}>{planDetail(plan.id)}</Text>
                   </View>
-                  {credited ? <Text style={{ color: "#8a918c", fontWeight: "700" }}>{fill(t.listing.priceNow, { amount: inr(priceNow) })}</Text> : plan.tag ? <View style={{ backgroundColor: "#f8e7c0", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ color: "#8a5a12", fontWeight: "800", fontSize: 12 }}>{t.common.premium}</Text></View> : <Text style={{ color: "#8a918c", fontWeight: "700" }}>{inr(full)}</Text>}
+                  {credited ? <Text style={{ color: "#8a918c", fontWeight: "700" }}>{fill(t.listing.priceNow, { amount: inr(priceNow) })}</Text> : (
+                    <View style={{ alignItems: "flex-end" }}>
+                      {offer ? <Text style={{ color: "#8a918c", textDecorationLine: "line-through", fontSize: 12 }}>{inr(listPrice)}</Text> : null}
+                      <Text style={{ color: colors.ink, fontWeight: "800" }}>{inr(full)}</Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}

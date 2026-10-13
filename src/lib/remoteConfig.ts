@@ -12,9 +12,20 @@ export type RemoteSettings = {
   apiUrl: string | null;
   standardPrice: number;
   premiumPrice: number;
+  premiumListPrice: number;
+  premiumOfferPercent: number;
+  premiumSavings: number;
+  yearlyDiscountPercent: number;
 };
 
-const fallbackPrices = { standardPrice: 20, premiumPrice: 30 };
+const fallbackPrices = {
+  standardPrice: 20,
+  premiumPrice: 30,
+  premiumListPrice: 30,
+  premiumOfferPercent: 0,
+  premiumSavings: 0,
+  yearlyDiscountPercent: 15,
+};
 
 let current: RemoteSettings = { apiUrl: null, ...fallbackPrices };
 const rcEntries: Record<string, string> = {};
@@ -61,10 +72,37 @@ function cleanUrl(value: string | null | undefined) {
 }
 
 function publishFromEntries() {
+  const premiumListPrice = priceOf(rcEntries.premium_property_price, fallbackPrices.premiumListPrice);
   current = {
+    ...current,
     apiUrl: cleanUrl(rcEntries.property_api_base_url),
     standardPrice: priceOf(rcEntries.custom_property_price, fallbackPrices.standardPrice),
-    premiumPrice: priceOf(rcEntries.premium_property_price, fallbackPrices.premiumPrice),
+    premiumListPrice,
+    premiumPrice: premiumListPrice,
+    premiumOfferPercent: 0,
+    premiumSavings: 0,
+    yearlyDiscountPercent: current.yearlyDiscountPercent || fallbackPrices.yearlyDiscountPercent,
+  };
+  listeners.forEach((listener) => listener());
+}
+
+/** Admin Settings override Firebase prices, including the premium offer. */
+export function applyServerListingSettings(settings: {
+  standardPrice: number;
+  premiumPrice: number;
+  premiumListPrice: number;
+  premiumOfferPercent: number;
+  premiumSavings: number;
+  yearlyDiscountPercent: number;
+}) {
+  current = {
+    ...current,
+    standardPrice: settings.standardPrice,
+    premiumPrice: settings.premiumPrice,
+    premiumListPrice: settings.premiumListPrice,
+    premiumOfferPercent: settings.premiumOfferPercent,
+    premiumSavings: settings.premiumSavings,
+    yearlyDiscountPercent: settings.yearlyDiscountPercent,
   };
   listeners.forEach((listener) => listener());
 }

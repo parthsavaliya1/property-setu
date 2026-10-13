@@ -90,6 +90,7 @@ export function LoginScreen({ onBrowse, onPrivacy }: { onBrowse: () => void; onP
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [demoLogin, setDemoLogin] = useState(false);
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -114,6 +115,7 @@ export function LoginScreen({ onBrowse, onPrivacy }: { onBrowse: () => void; onP
     setStep("form");
     setOtp("");
     setSessionId("");
+    setDemoLogin(false);
     setError("");
   }
 
@@ -136,7 +138,8 @@ export function LoginScreen({ onBrowse, onPrivacy }: { onBrowse: () => void; onP
     try {
       const nextSession = await auth.sendOtp(mobile, mode === "signup");
       setPhone(mobile);
-      setSessionId(nextSession);
+      setSessionId(nextSession.sessionId);
+      setDemoLogin(nextSession.demo);
       setOtp("");
       setStep("otp");
       setSecondsLeft(30);
@@ -169,7 +172,7 @@ export function LoginScreen({ onBrowse, onPrivacy }: { onBrowse: () => void; onP
   const sheetWidth = Math.min(width, 430);
   const title = step === "otp" ? t.auth.enterOtp : mode === "login" ? t.auth.welcome : t.auth.createAccount;
   const subtitle = step === "otp"
-    ? fill(t.auth.otpSent, { phone })
+    ? (demoLogin ? t.auth.demoOtp : fill(t.auth.otpSent, { phone }))
     : mode === "login"
       ? t.auth.loginHint
       : t.auth.signupHint;
