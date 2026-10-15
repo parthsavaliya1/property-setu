@@ -41,7 +41,7 @@ function checkoutHtml(order: RazorpayOrder) {
     description: ${JSON.stringify(order.description)},
     order_id: ${JSON.stringify(order.orderId)},
     prefill: { email: ${JSON.stringify(order.email || "")} },
-    theme: { color: "#B56A45" },
+    theme: { color: ${JSON.stringify(colors.primary)} },
     handler: function (response) {
       window.ReactNativeWebView.postMessage(JSON.stringify(response));
     },
@@ -78,7 +78,7 @@ function openWebCheckout(order: RazorpayOrder) {
         description: order.description,
         order_id: order.orderId,
         prefill: { email: order.email || "" },
-        theme: { color: "#B56A45" },
+        theme: { color: colors.primary },
         handler: (response: RazorpaySuccess) => resolve(response),
         modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
       });

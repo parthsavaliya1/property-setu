@@ -121,6 +121,7 @@ export const hi: Copy = {
   },
   menu: {
     viewProfile: "प्रोफ़ाइल देखें",
+    saleMap: "बिक्री का नक्शा",
     favorites: "पसंदीदा",
     messages: "संदेश",
     inquiries: "पूछताछ",

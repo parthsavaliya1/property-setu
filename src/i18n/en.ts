@@ -119,6 +119,7 @@ export const en = {
   },
   menu: {
     viewProfile: "View profile",
+    saleMap: "For sale map",
     favorites: "Favorites",
     messages: "Messages",
     inquiries: "Inquiries",

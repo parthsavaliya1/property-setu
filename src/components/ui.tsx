@@ -7,7 +7,7 @@ import { requestScrollFocusedInput } from "./keyboard";
 import { VoiceTextInput } from "./VoiceField";
 import type { SpokenKind } from "../lib/numbers";
 import { useI18n } from "../i18n";
-import { buttonShadow, cardShadow, colors } from "../theme";
+import { buttonShadow, cardShadow, colors, themed } from "../theme";
 
 const brandLogo = require("../../assets/center-logo.png");
 
@@ -250,7 +250,7 @@ export function ScreenTitle({ title, subtitle }: { title: string; subtitle?: str
   );
 }
 
-export const styles = StyleSheet.create({
+export const styles = themed(() => StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.cream },
   header: { backgroundColor: colors.forest, padding: 20, paddingTop: 16, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   kicker: { color: "rgba(255,255,255,0.75)", fontSize: 13 },
@@ -274,4 +274,4 @@ export const styles = StyleSheet.create({
   chipRow: { flexDirection: "row", gap: 8, marginTop: 12 },
   chip: { backgroundColor: "rgba(255,255,255,0.14)", color: "white", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, overflow: "hidden", fontWeight: "700" },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
-});
+}));

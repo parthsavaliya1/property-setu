@@ -145,6 +145,7 @@ function MenuRoute() {
     <MenuScreen
       onClose={() => navigationRef.goBack()}
       onProfile={() => openTab("Profile")}
+      onSaleMap={() => leaveMenu(() => navigationRef.dispatch(StackActions.replace("Map")))}
       onFavorites={() => openTab("Saved")}
       onChats={() => {
         if (!session) {

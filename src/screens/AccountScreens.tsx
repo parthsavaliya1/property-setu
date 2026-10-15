@@ -21,6 +21,7 @@ import type { Inquiry, NotificationItem, PropertyCard, Visit, WalletTransaction 
 export function MenuScreen({
   onClose,
   onProfile,
+  onSaleMap,
   onFavorites,
   onChats,
   onInquiries,
@@ -32,6 +33,7 @@ export function MenuScreen({
 }: {
   onClose?: () => void;
   onProfile: () => void;
+  onSaleMap: () => void;
   onFavorites: () => void;
   onChats: () => void;
   onInquiries: () => void;
@@ -48,6 +50,7 @@ export function MenuScreen({
   const name = me?.profile?.full_name || t.common.guest;
   const place = [me?.profile?.city].filter(Boolean).join(", ");
   const rows: Array<{ label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; value?: string }> = [
+    { label: t.menu.saleMap, icon: "map-outline", onPress: onSaleMap },
     { label: t.menu.favorites, icon: "heart-outline", onPress: onFavorites },
     { label: t.menu.messages, icon: "chatbubbles-outline", onPress: onChats },
     { label: t.menu.inquiries, icon: "document-text-outline", onPress: onInquiries },

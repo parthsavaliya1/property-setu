@@ -121,6 +121,7 @@ export const gu: Copy = {
   },
   menu: {
     viewProfile: "પ્રોફાઇલ જુઓ",
+    saleMap: "વેચાણનો નકશો",
     favorites: "મનપસંદ",
     messages: "સંદેશા",
     inquiries: "પૂછપરછ",

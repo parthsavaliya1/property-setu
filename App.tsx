@@ -5,7 +5,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/context/AuthContext";
 import { FavoritesProvider } from "./src/context/FavoritesContext";
 import { LanguageProvider, useI18n } from "./src/i18n";
+import { loadAppTheme } from "./src/lib/appTheme";
 import { subscribeRemoteSettings } from "./src/lib/remoteConfig";
+import { SeasonalAtmosphere } from "./src/components/SeasonalAtmosphere";
 import { RootNavigation } from "./src/navigation";
 import { colors } from "./src/theme";
 
@@ -39,8 +41,14 @@ function CrashFallback({ onRetry }: { onRetry: () => void }) {
 
 function RemoteSettingsBridge({ children }: { children: ReactNode }) {
   const [, setVersion] = useState(0);
+  const [themeVersion, setThemeVersion] = useState(0);
   useEffect(() => subscribeRemoteSettings(() => setVersion((value) => value + 1)), []);
-  return children;
+  useEffect(() => {
+    loadAppTheme().then((changed) => {
+      if (changed) setThemeVersion((value) => value + 1);
+    }).catch(() => undefined);
+  }, []);
+  return <View key={themeVersion} style={{ flex: 1 }}>{children}<SeasonalAtmosphere /></View>;
 }
 
 export default function App() {

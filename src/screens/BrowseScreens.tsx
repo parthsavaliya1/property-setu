@@ -16,6 +16,7 @@ import { fill } from "../i18n/format";
 import { amenityName } from "../i18n/labels";
 import { useFavorites } from "../context/FavoritesContext";
 import { api, cityName, inr, listingLabel, PROPERTY_PAGE_SIZE, sortForSearch, type SavedSearch } from "../lib/api";
+import { placeSalePins } from "../lib/mapPins";
 import { nearScrollEnd, usePagedProperties } from "../lib/paging";
 import { useBrowseCity } from "../lib/location";
 import { useRequireLogin } from "../context/LoginGate";
@@ -143,16 +144,18 @@ const kindChips = [
   { label: "Shop", query: "category=shop" },
 ];
 
-const categories = [
-  { label: "Buy", query: "listing_type=sale", bg: "#F3E4DB", color: "#B56A45", icon: "home" as const },
-  { label: "Rent", query: "listing_type=rent", bg: "#F1EAE2", color: "#8F4F32", icon: "home-city" as const },
-  { label: "Plot", query: "category=residential-plot", bg: "#F8EEDD", color: "#C88A3D", icon: "checkbox-blank-outline" as const },
-  { label: "Land", query: "category=agricultural-land", bg: "#F3E4DB", color: "#8F4F32", icon: "upload" as const },
-  { label: "House", query: "category=house", bg: "#F1EAE2", color: "#B56A45", icon: "home-outline" as const },
-  { label: "Apartment", query: "category=apartment", bg: "#F7F3EC", color: "#6F6A64", icon: "office-building" as const },
-  { label: "Villa", query: "category=villa", bg: "#F8EEDD", color: "#C88A3D", icon: "home-variant" as const },
-  { label: "Shop", query: "category=shop", bg: "#F1EAE2", color: "#6F6A64", icon: "storefront-outline" as const },
-];
+function homeCategories() {
+  return [
+    { label: "Buy", query: "listing_type=sale", bg: colors.primarySoft, color: colors.primary, icon: "home" as const },
+    { label: "Rent", query: "listing_type=rent", bg: colors.secondary, color: colors.primaryDark, icon: "home-city" as const },
+    { label: "Plot", query: "category=residential-plot", bg: colors.highlight, color: colors.warning, icon: "checkbox-blank-outline" as const },
+    { label: "Land", query: "category=agricultural-land", bg: colors.primarySoft, color: colors.primaryDark, icon: "upload" as const },
+    { label: "House", query: "category=house", bg: colors.secondary, color: colors.primary, icon: "home-outline" as const },
+    { label: "Apartment", query: "category=apartment", bg: colors.page, color: colors.muted, icon: "office-building" as const },
+    { label: "Villa", query: "category=villa", bg: colors.highlight, color: colors.warning, icon: "home-variant" as const },
+    { label: "Shop", query: "category=shop", bg: colors.secondary, color: colors.muted, icon: "storefront-outline" as const },
+  ];
+}
 
 function LocationPrompt({ denied, canAskAgain, onAllow }: { denied: boolean; canAskAgain: boolean; onAllow: () => void }) {
   const { t } = useI18n();
@@ -329,7 +332,7 @@ export function HomeScreen({
     >
       <View style={{ marginHorizontal: 20, marginTop: 8, backgroundColor: colors.card, borderRadius: 20, paddingTop: 16, paddingBottom: 4, borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {categories.map((item) => (
+          {homeCategories().map((item) => (
             <Pressable key={item.label} onPress={() => onSearch(item.query)} style={{ width: "25%", alignItems: "center", marginBottom: 14 }}>
               <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: item.bg, alignItems: "center", justifyContent: "center" }}>
                 <MaterialCommunityIcons name={item.icon} size={26} color={item.color} />
@@ -813,12 +816,32 @@ export function MapScreen({ onOpen, showBack }: { onOpen: (id: string) => void; 
   const [items, setItems] = useState<PropertyCard[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    api.properties(`?limit=${PROPERTY_PAGE_SIZE}`).then(setItems).catch(() => setItems([])).finally(() => setLoading(false));
+    let active = true;
+    (async () => {
+      const all: PropertyCard[] = [];
+      const limit = 50;
+      try {
+        for (let offset = 0; offset < 500; offset += limit) {
+          const rows = await api.properties(`?listing_type=sale&status=published&limit=${limit}&offset=${offset}`);
+          all.push(...rows);
+          if (rows.length < limit) break;
+        }
+        const placed = await placeSalePins(all.filter((item) => item.listing_type === "sale"));
+        if (active) setItems(placed);
+      } catch {
+        if (active) setItems([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
-  const pins = items.filter((item) => item.latitude && item.longitude);
+  const pins = items.filter((item) => item.listing_type === "sale");
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      {showBack ? <PageHeader title={t.search.map} /> : null}
+      {showBack ? <PageHeader title={t.menu.saleMap} /> : null}
       {loading ? <View style={{ flex: 1, margin: 16 }}><SkeletonBlock fill radius={16} /></View> : <PropertyMap pins={pins} onOpen={onOpen} />}
     </View>
   );
