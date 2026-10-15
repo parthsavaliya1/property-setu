@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "PropertySetu",
-    "slug": "propertyhub",
+    "slug": "property-setu",
     "icon": "./assets/app-icon.png",
     "scheme": "propertyhub",
     "version": "1.0.0",
@@ -73,7 +73,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "fd752e83-5bbd-4342-9f0a-9526897c3f95"
+        "projectId": "a6938513-1b37-4c33-aacf-a650237e7761"
       }
     },
     "owner": "parthsavaliya11"
