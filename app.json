@@ -8,7 +8,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-brand.png",
+      "image": "./assets/logo.png",
       "resizeMode": "cover",
       "backgroundColor": "#F7F3EC"
     },
