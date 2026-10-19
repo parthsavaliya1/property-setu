@@ -10,7 +10,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "verify:android": "node scripts/verify-android.cjs"
+    "verify:android": "node scripts/verify-android.cjs",
+    "test:safety": "node --test scripts/chat-safety.test.cjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",

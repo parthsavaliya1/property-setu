@@ -34,6 +34,7 @@ function load(relative) {
     if (name === 'expo-constants') return { default: {} };
     if (name === 'expo-file-system') return { File: class {} };
     if (name.endsWith('/theme')) return { colors: {} };
+    if (name.endsWith('/AuthContext')) return { useAuth: () => ({ token: 'test' }) };
     if (name.endsWith('/i18n/active')) return { getCopy: () => ({}) };
     if (name.endsWith('/remoteConfig')) return { getRemoteSettings: () => ({}), subscribeRemoteSettings: () => () => {} };
     if (name.startsWith('.')) return load(path.relative(path.resolve(__dirname, '..'), path.resolve(path.dirname(filename), name + '.ts')));
@@ -108,5 +109,30 @@ test('blocking removes cached Home rows and rejects a stale in-flight page', asy
     await React.act(async () => { resolveStale(stale); await pending; });
     assert.equal(page.items.length, 1);
     assert.equal(page.items[0].owner_id, 'other-owner');
+  } finally { await view.close(); }
+});
+
+test('Saved cache rejects an initial response from before a block and reloads on unblock', async () => {
+  const { FavoritesProvider, useFavorites } = load('src/context/FavoritesContext.tsx');
+  const oldRows = [{ id: 'blocked', owner_id: 'blocked-owner' }, { id: 'safe', owner_id: 'other-owner' }];
+  let resolveInitial;
+  let calls = 0;
+  fetchImpl = async () => {
+    calls++;
+    if (calls === 1) return new Promise(resolve => { resolveInitial = resolve; });
+    return new Response(JSON.stringify(calls === 2 ? [oldRows[1]] : oldRows), { status: 200 });
+  };
+  let favorites;
+  function Consumer() { favorites = useFavorites(); return React.createElement('span', null, favorites.items.map(row => row.id).join(',')); }
+  const view = await mount(() => React.createElement(FavoritesProvider, null, React.createElement(Consumer)));
+  try {
+    await React.act(async () => changes.publishBlockChange({ userId: 'blocked-owner', blocked: true }));
+    assert.equal(favorites.items.length, 1);
+    assert.equal(favorites.ready, true);
+    await React.act(async () => resolveInitial(new Response(JSON.stringify(oldRows), { status: 200 })));
+    assert.equal(favorites.items.length, 1);
+    assert.equal(favorites.items[0].id, 'safe');
+    await React.act(async () => changes.publishBlockChange({ userId: 'blocked-owner', blocked: false }));
+    assert.equal(favorites.items.length, 2);
   } finally { await view.close(); }
 });

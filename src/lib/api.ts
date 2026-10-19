@@ -41,10 +41,7 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   const headers = new Headers(options.headers);
   if (options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  // const base = apiBase();
-  const base = "http://192.168.29.55:4000";
-
-  console.log("base", base);
+  const base = apiBase();
   // Log request identity only: never include headers, OTPs, bodies or query values.
   const requestInfo = { method: options.method || "GET", server: base, path: `/api${path.split("?")[0]}` };
   let response: Response;

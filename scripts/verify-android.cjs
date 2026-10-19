@@ -2,6 +2,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const ts = require('typescript');
+
+const appRoot = path.join(__dirname, '..');
+const apiSource = ts.createSourceFile('api.ts', fs.readFileSync(path.join(appRoot, 'src/lib/api.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+const requestFunction = apiSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'request');
+const baseVariable = requestFunction?.body?.statements.flatMap(node => ts.isVariableStatement(node) ? [...node.declarationList.declarations] : []).find(node => node.name.getText(apiSource) === 'base');
+assert.ok(baseVariable?.initializer && ts.isCallExpression(baseVariable.initializer) && baseVariable.initializer.expression.getText(apiSource) === 'apiBase', 'request() must use apiBase(); remove private/local API overrides before release.');
+const linksSource = fs.readFileSync(path.join(appRoot, 'src/lib/publicLinks.ts'), 'utf8');
+const publicUrl = linksSource.match(/PUBLIC_WEBSITE_URL\s*=\s*["']([^"']+)/)?.[1];
+assert.ok(publicUrl, 'Public policy website URL is missing');
+const website = new URL(publicUrl);
+assert.ok(website.protocol === 'https:' && !/^(localhost|127\.|192\.168\.|10\.|0\.)/i.test(website.hostname), 'Policy/deletion website must use a public HTTPS URL.');
 
 const expoRoot = path.dirname(require.resolve('expo/package.json'));
 const result = spawnSync(process.execPath, [path.join(expoRoot, 'bin', 'cli'), 'config', '--type', 'introspect', '--json'], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });

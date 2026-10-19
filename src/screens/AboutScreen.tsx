@@ -1,5 +1,6 @@
 import { BlockedUsers } from "../components/BlockedUsers";
 import { Alert, Linking } from "react-native";
+import { DELETE_ACCOUNT_URL, TERMS_URL } from "../lib/publicLinks";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useState } from "react";
@@ -114,10 +115,10 @@ export function AboutScreen({ onDeleted, onSignIn, onPrivacy }: { onDeleted: () 
               {busy ? t.common.deleting : t.about.deleteAccount}
             </Text>
           </Pressable>
-          <Pressable accessibilityRole="link" onPress={() => { Linking.openURL("http://localhost:8080/delete-account").catch(() => Alert.alert("Could not open page", "Please try again.")); }} style={{ paddingVertical: 10, paddingHorizontal: 8 }}>
+          <Pressable accessibilityRole="link" onPress={() => { Linking.openURL(DELETE_ACCOUNT_URL).catch(() => Alert.alert("Could not open page", "Please try again.")); }} style={{ paddingVertical: 10, paddingHorizontal: 8 }}>
             <Text style={{ fontSize: 13, fontWeight: "600", color: colors.muted, textDecorationLine: "underline" }}>Delete account on the web</Text>
           </Pressable>
-          <Pressable accessibilityRole="link" onPress={() => { Linking.openURL("http://localhost:8080/terms").catch(() => Alert.alert("Could not open page", "Please make sure the website is running and try again.")); }} style={{ paddingVertical: 10, paddingHorizontal: 8 }}>
+          <Pressable accessibilityRole="link" onPress={() => { Linking.openURL(TERMS_URL).catch(() => Alert.alert("Could not open page", "Please try again later.")); }} style={{ paddingVertical: 10, paddingHorizontal: 8 }}>
             <Text style={{ fontSize: 13, fontWeight: "600", color: colors.muted, textDecorationLine: "underline" }}>Terms and community rules</Text>
           </Pressable>
         </View>

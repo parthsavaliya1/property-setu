@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Linking, Pressable } from "react-native";
 import { apiBase } from "../lib/api";
 import { privacySections } from "../lib/privacyContent";
+import { DELETE_ACCOUNT_URL, PRIVACY_URL, SUPPORT_EMAIL } from "../lib/publicLinks";
 import { ScrollView, Text, View } from "react-native";
 import { PageHeader } from "../components/ui";
 import { useI18n } from "../i18n";
@@ -13,10 +14,10 @@ export function PrivacyScreen() {
   const { t } = useI18n();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const sections = privacySections;
-  const [email, setEmail] = useState<string | null>(null);
+  const [email, setEmail] = useState(SUPPORT_EMAIL);
   useEffect(() => {
     let active = true;
-    fetch(apiBase() + '/api/legal').then(res => { if (!res.ok) throw new Error('Unavailable'); return res.json(); }).then(data => { if (active) setEmail(data.support_email || null); }).catch(() => undefined);
+    fetch(apiBase() + '/api/legal').then(res => { if (!res.ok) throw new Error('Unavailable'); return res.json(); }).then(data => { if (active && typeof data.support_email === 'string' && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(data.support_email)) setEmail(data.support_email); }).catch(() => undefined);
     return () => { active = false; };
   }, []);
 
@@ -36,8 +37,8 @@ export function PrivacyScreen() {
         ))}
         <View style={card}><Text style={sectionTitle}>Contact and account deletion</Text>
           {email ? <Text onPress={() => Linking.openURL('mailto:' + email)} style={bodyText}>{email}</Text> : <Text style={bodyText}>Open the public policy for current support contact details.</Text>}
-          <Pressable onPress={() => Linking.openURL(apiBase() + '/delete-account')}><Text style={bodyText}>Delete account in a browser</Text></Pressable>
-          <Pressable onPress={() => Linking.openURL(apiBase() + '/privacy')}><Text style={bodyText}>Public privacy policy</Text></Pressable>
+          <Pressable onPress={() => Linking.openURL(DELETE_ACCOUNT_URL)}><Text style={bodyText}>Delete account in a browser</Text></Pressable>
+          <Pressable onPress={() => Linking.openURL(PRIVACY_URL)}><Text style={bodyText}>Public privacy policy</Text></Pressable>
           <Pressable onPress={() => navigation.navigate("Terms")}><Text style={bodyText}>Terms and community rules</Text></Pressable>
         </View>
       </ScrollView>

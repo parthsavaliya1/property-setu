@@ -3,6 +3,7 @@ import { useAuth } from "./AuthContext";
 import { PROPERTY_PAGE_SIZE, api, appendProperties } from "../lib/api";
 import { getRemoteSettings, subscribeRemoteSettings } from "../lib/remoteConfig";
 import type { PropertyCard } from "../types/database";
+import { subscribeBlockChanges } from "../lib/blockChanges";
 
 type FavoritesValue = {
   items: PropertyCard[];
@@ -128,6 +129,19 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(async () => {
     paging.current = { offset: 0, hasMore: true, busy: false, gen: paging.current.gen };
     await fetchPage(true);
+  }, [fetchPage]);
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = subscribeBlockChanges(({ userId, blocked }) => {
+      // Reject both an old initial load and old paginated responses.
+      changes.current += 1;
+      paging.current.gen += 1;
+      paging.current.busy = false;
+      if (blocked) setItems(current => current.filter(item => item.owner_id !== userId));
+      void fetchPage(true).finally(() => { if (active) setReady(true); });
+    });
+    return () => { active = false; unsubscribe(); };
   }, [fetchPage]);
 
   const loadMore = useCallback(async () => {
