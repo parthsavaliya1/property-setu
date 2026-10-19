@@ -1,3 +1,4 @@
+import { PlayBillingHost } from "./components/PlayBilling";
 import { NavigationContainer, NavigatorScreenParams, StackActions, createNavigationContainerRef } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -14,6 +15,7 @@ import { subscribePushOpens } from "./lib/push";
 import { EditProfileScreen, FavoritesScreen, InquiriesScreen, MenuScreen, MyPropertiesScreen, NotificationsScreen, PaymentHistoryScreen, ProfileScreen, VisitsScreen, WalletScreen } from "./screens/AccountScreens";
 import { AboutScreen } from "./screens/AboutScreen";
 import { PrivacyScreen } from "./screens/PrivacyScreen";
+import { TermsScreen } from "./screens/TermsScreen";
 import { ChatScreen, ChatsScreen } from "./screens/ChatScreens";
 import { LoginScreen, OnboardingScreen, SplashScreen } from "./screens/AuthScreens";
 import { DetailsScreen, HomeScreen, MapScreen, SearchScreen } from "./screens/BrowseScreens";
@@ -48,6 +50,7 @@ export type RootStackParamList = {
   PaymentHistory: undefined;
   About: undefined;
   Privacy: undefined;
+  Terms: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -273,7 +276,7 @@ export function RootNavigation() {
 
   const apiUrl = getRemoteSettings().apiUrl || "";
   return (
-    <RazorpayHost>
+    <RazorpayHost><PlayBillingHost>
     <RequireLoginContext.Provider value={setLoginMessage}>
       <NavigationContainer key={apiUrl || "local"} ref={navigationRef}>
         <Stack.Navigator
@@ -355,6 +358,7 @@ export function RootNavigation() {
           />
         )}</Stack.Screen>
         <Stack.Screen name="Privacy" component={PrivacyScreen} />
+        <Stack.Screen name="Terms" component={TermsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
       <Modal visible={Boolean(loginMessage)} transparent animationType="fade" onRequestClose={() => setLoginMessage(null)}>
@@ -380,6 +384,6 @@ export function RootNavigation() {
         </View>
       </Modal>
     </RequireLoginContext.Provider>
-    </RazorpayHost>
+    </PlayBillingHost></RazorpayHost>
   );
 }

@@ -1,12 +1,13 @@
+import { AppState } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Image, Linking, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardScreen, useKeyboardOverlap } from "../components/keyboard";
-import { VoiceTextInput } from "../components/VoiceField";
+import { VoiceButton } from "../components/VoiceField";
 import { io, type Socket } from "socket.io-client";
 import { ListSkeleton } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
@@ -16,6 +17,8 @@ import { fill } from "../i18n/format";
 import { api, apiBase, uploadMedia } from "../lib/api";
 import { colors } from "../theme";
 import type { ChatMessage, ChatThread } from "../types/database";
+
+import { SafetyActions } from "../components/SafetyActions";
 
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍"];
 const MORE_REACTIONS = [
@@ -200,6 +203,9 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const openedThread = useRef<{ key: string; id: string } | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const mineId = session?.user.id;
 
@@ -208,7 +214,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
     return () => clearTimeout(timer);
   }, [keyboardOverlap]);
-  const canSend = Boolean(draft.trim() || pending) && !sending;
+  const canSend = Boolean(draft.trim() || pending) && !sending && !loading && !loadFailed && Boolean(threadId && thread) && !thread?.messaging_blocked;
 
   useEffect(() => {
     if (!token) {
@@ -218,21 +224,32 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
     }
     const sessionToken = token;
     let active = true;
+    const key = JSON.stringify([conversationId, propertyId, buyerId, token]);
+    setLoading(true);
+    setLoadFailed(false);
+    setError("");
+    setThread(null);
+    setItems([]);
+    setThreadId(undefined);
     async function load() {
       try {
-        const id = conversationId || (propertyId ? (await api.openChat(propertyId, sessionToken, buyerId)).id : "");
+        const id = conversationId || (openedThread.current?.key === key ? openedThread.current.id : "") || (propertyId ? (await api.openChat(propertyId, sessionToken, buyerId)).id : "");
         if (!id) throw new Error(t.chat.notFound);
         if (!active) return;
+        // A retry should load the existing conversation, even if its first read failed.
+        openedThread.current = { key, id };
         setThreadId(id);
-        const [rows, meta] = await Promise.all([
-          api.messages(id, sessionToken),
-          api.chat(id, sessionToken).catch(() => null),
+        const results = await Promise.allSettled([
+          api.messages(id, sessionToken).then(rows => { if (active) setItems(rows); }),
+          api.chat(id, sessionToken).then(meta => { if (active) setThread(meta); }),
         ]);
-        if (!active) return;
-        setItems(rows);
-        if (meta) setThread(meta);
+        const failure = results.find(result => result.status === "rejected");
+        if (failure?.status === "rejected") throw failure.reason;
       } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : t.chat.openFailed);
+        if (active) {
+          setLoadFailed(true);
+          setError(err instanceof Error ? err.message : t.chat.openFailed);
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -241,7 +258,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
     return () => {
       active = false;
     };
-  }, [conversationId, propertyId, buyerId, token]);
+  }, [conversationId, propertyId, buyerId, token, loadAttempt]);
 
   useEffect(() => {
     if (!token || !threadId) return;
@@ -268,7 +285,27 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
         return { ...row, reactions };
       }));
     });
+    let active = true;
+    let syncing = false;
+    const refresh = async () => {
+      if (!active || syncing || AppState.currentState !== 'active') return;
+      syncing = true;
+      try {
+        const meta = await api.chat(threadId!, token!);
+        if (active) setThread(meta);
+        if (!socket.connected) {
+          const rows = await api.messages(threadId!, token!);
+          if (active) setItems(rows);
+        }
+      } catch { /* Retry on the next foreground refresh. */ }
+      finally { syncing = false; }
+    };
+    const timer = setInterval(() => { void refresh(); }, 8000);
+    const appState = AppState.addEventListener('change', state => { if (state === 'active') void refresh(); });
     return () => {
+      active = false;
+      clearInterval(timer);
+      appState.remove();
       socket.disconnect();
     };
   }, [token, threadId, mineId]);
@@ -278,7 +315,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
   }, [items.length, loading]);
 
   async function send() {
-    if (!token || !threadId || sending) return;
+    if (!token || !threadId || !thread || loading || loadFailed || sending || thread.messaging_blocked) return;
     const text = draft.trim();
     const file = pending;
     if (!text && !file) return;
@@ -309,11 +346,6 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
 
   async function pickImage() {
     if (sending) return;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError(t.listing.photoPermission);
-      return;
-    }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
     if (result.canceled) return;
     const asset = result.assets[0];
@@ -387,7 +419,9 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
           <Text numberOfLines={1} style={{ fontSize: 17, fontWeight: "800", color: colors.ink }}>{name}</Text>
           <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, marginTop: 1 }}>{thread?.property_title || t.chat.propertyChat}</Text>
         </View>
+        {thread && token ? <SafetyActions userId={thread.buyer_id === mineId ? thread.owner_id : thread.buyer_id} conversationId={threadId} token={token} blocked={thread.blocked_by_me} onChanged={() => { if (threadId) api.chat(threadId, token).then(setThread).catch(err => setError(err.message)); }} /> : null}
       </View>
+      {thread?.messaging_blocked ? <Text style={{ padding: 12, color: colors.danger }}>Messaging is unavailable because a user is blocked.</Text> : null}
 
       {loading ? <View style={{ flex: 1, padding: 16 }}><ListSkeleton /></View> : (
         <ScrollView ref={scrollRef} contentContainerStyle={{ paddingHorizontal: 10, paddingTop: 10, paddingBottom: 12 }} keyboardShouldPersistTaps="handled" onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
@@ -454,6 +488,11 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
       )}
 
       {error ? <Text style={{ marginHorizontal: 16, marginBottom: 6, backgroundColor: "#F8E6E3", color: colors.danger, padding: 8, borderRadius: 10 }}>{error}</Text> : null}
+      {loadFailed && !loading ? (
+        <Pressable onPress={() => setLoadAttempt(value => value + 1)} style={{ alignSelf: "center", padding: 12 }}>
+          <Text style={{ color: colors.primary, fontWeight: "700" }}>{t.common.tryAgain}</Text>
+        </Pressable>
+      ) : null}
 
       {reply ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 12, marginBottom: 8, padding: 10, borderRadius: 12, backgroundColor: "#FAFAFA", borderWidth: 1, borderColor: "#EFEFEF" }}>
@@ -497,21 +536,25 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
       ) : null}
 
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 8, paddingTop: 6, paddingBottom: keyboardOverlap > 0 ? 8 : Math.max(insets.bottom, 8), backgroundColor: "#EFE6DA" }}>
-        <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-end", backgroundColor: colors.white, borderRadius: 24, paddingLeft: 6, paddingRight: 12, minHeight: 48 }}>
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-end", backgroundColor: colors.white, borderRadius: 24, paddingLeft: 4, paddingRight: 4, minHeight: 48 }}>
           <Pressable onPress={() => setAttachOpen((open) => !open)} disabled={sending} hitSlop={6} style={{ width: 40, height: 48, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name={attachOpen ? "close" : "attach"} size={24} color={colors.muted} />
           </Pressable>
-          <VoiceTextInput
+          <TextInput
+            accessibilityLabel={t.chat.message}
             value={draft}
             onChangeText={setDraft}
             placeholder={sending ? t.chat.sending : t.chat.message}
             placeholderTextColor={colors.faint}
             multiline
-            style={{ flex: 1, maxHeight: 120, paddingVertical: 12, color: colors.ink, fontSize: 16 }}
+            textAlignVertical="center"
+            editable={!sending}
+            style={{ flex: 1, minWidth: 0, minHeight: 48, maxHeight: 120, paddingHorizontal: 4, paddingVertical: 12, lineHeight: 24, includeFontPadding: false, color: colors.ink, fontSize: 16 }}
           />
+          <VoiceButton disabled={sending} value={draft} onValue={setDraft} style={{ width: 40, height: 48 }} />
         </View>
-        <Pressable onPress={send} disabled={!canSend} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: canSend ? colors.primary : "#C9B8A8", alignItems: "center", justifyContent: "center" }}>
-          <Ionicons name="send" size={20} color={colors.white} style={{ marginLeft: 2 }} />
+        <Pressable accessibilityRole="button" accessibilityLabel={sending ? t.chat.sending : t.chat.message} accessibilityState={{ disabled: !canSend, busy: sending }} onPress={send} disabled={!canSend} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: canSend || sending ? colors.primary : "#C9B8A8", alignItems: "center", justifyContent: "center" }}>
+          {sending ? <ActivityIndicator size="small" color={colors.white} /> : <Ionicons name="send" size={20} color={colors.white} style={{ marginLeft: 2 }} />}
         </Pressable>
       </View>
 
@@ -555,6 +598,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
                   <Ionicons name="arrow-undo-outline" size={24} color={colors.ink} />
                   <Text style={{ marginLeft: 14, fontSize: 16, color: colors.ink }}>{t.chat.reply}</Text>
                 </Pressable>
+                {!menu.mine && token && thread ? <SafetyActions userId={menu.sender_id} conversationId={threadId} messageId={menu.id} token={token} blocked={thread.blocked_by_me} onChanged={() => { setMenu(null); if (threadId) api.chat(threadId, token).then(setThread).catch(err => setError(err.message)); }} /> : null}
                 {menu.mine && !menu.deleted ? (
                   <Pressable onPress={() => { const chosen = menu; setMenu(null); setEmojiOpen(false); removeMessage(chosen); }} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 20 }}>
                     <Ionicons name="trash-outline" size={24} color="#ED4956" />

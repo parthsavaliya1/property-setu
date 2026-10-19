@@ -1,3 +1,9 @@
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import type { RootStackParamList } from "../navigation";
+import { useEffect, useState } from "react";
+import { Linking, Pressable } from "react-native";
+import { apiBase } from "../lib/api";
+import { privacySections } from "../lib/privacyContent";
 import { ScrollView, Text, View } from "react-native";
 import { PageHeader } from "../components/ui";
 import { useI18n } from "../i18n";
@@ -5,23 +11,20 @@ import { colors } from "../theme";
 
 export function PrivacyScreen() {
   const { t } = useI18n();
-  const sections = [
-    [t.privacy.whoTitle, t.privacy.whoBody],
-    [t.privacy.collectTitle, t.privacy.collectBody],
-    [t.privacy.useTitle, t.privacy.useBody],
-    [t.privacy.shareTitle, t.privacy.shareBody],
-    [t.privacy.keepTitle, t.privacy.keepBody],
-    [t.privacy.choicesTitle, t.privacy.choicesBody],
-    [t.privacy.childrenTitle, t.privacy.childrenBody],
-    [t.privacy.changesTitle, t.privacy.changesBody],
-    [t.privacy.contactTitle, t.privacy.contactBody],
-  ] as const;
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const sections = privacySections;
+  const [email, setEmail] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetch(apiBase() + '/api/legal').then(res => { if (!res.ok) throw new Error('Unavailable'); return res.json(); }).then(data => { if (active) setEmail(data.support_email || null); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <PageHeader title={t.privacy.title} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        <Text style={{ fontSize: 13, color: colors.faint, fontWeight: "600" }}>{t.privacy.updated}</Text>
+        <Text style={{ fontSize: 13, color: colors.faint, fontWeight: "600" }}>Updated 19 October 2026</Text>
         <Text style={[bodyText, { marginTop: 10 }]}>{t.privacy.intro}</Text>
         {sections.map(([title, body]) => (
           <View key={title} style={card}>
@@ -31,6 +34,12 @@ export function PrivacyScreen() {
             ))}
           </View>
         ))}
+        <View style={card}><Text style={sectionTitle}>Contact and account deletion</Text>
+          {email ? <Text onPress={() => Linking.openURL('mailto:' + email)} style={bodyText}>{email}</Text> : <Text style={bodyText}>Open the public policy for current support contact details.</Text>}
+          <Pressable onPress={() => Linking.openURL(apiBase() + '/delete-account')}><Text style={bodyText}>Delete account in a browser</Text></Pressable>
+          <Pressable onPress={() => Linking.openURL(apiBase() + '/privacy')}><Text style={bodyText}>Public privacy policy</Text></Pressable>
+          <Pressable onPress={() => navigation.navigate("Terms")}><Text style={bodyText}>Terms and community rules</Text></Pressable>
+        </View>
       </ScrollView>
     </View>
   );

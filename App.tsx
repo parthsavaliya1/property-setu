@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { Component, useEffect, useState, type ReactNode } from "react";
+import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/context/AuthContext";
@@ -16,6 +16,10 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { failed: bool
 
   static getDerivedStateFromError() {
     return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    if (__DEV__) console.error("[app screen error]", error, info.componentStack);
   }
 
   render() {

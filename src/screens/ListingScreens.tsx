@@ -1,3 +1,5 @@
+import { DeviceEventEmitter, Platform } from "react-native";
+import { confirmDataUse } from "../lib/confirmDataUse";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -9,7 +11,7 @@ import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput, useKeybo
 import { VoiceTextInput } from "../components/VoiceField";
 import type { SpokenKind } from "../lib/numbers";
 import { PageHeader, SkeletonBlock, styles } from "../components/ui";
-import { useRazorpay } from "../components/RazorpayCheckout";
+import { useWalletTopUp } from "../lib/useWalletTopUp";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n";
 import { getCopy, getLocale } from "../i18n/active";
@@ -111,7 +113,7 @@ const page = colors.page;
 export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone: () => void }) {
   const { t } = useI18n();
   const auth = useAuth();
-  const pay = useRazorpay();
+  const topUp = useWalletTopUp();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const keyboardOverlap = useKeyboardOverlap();
@@ -144,6 +146,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [freeAvailable, setFreeAvailable] = useState(false);
   const [trial, setTrial] = useState(false);
+  useEffect(() => { const subscription = DeviceEventEmitter.addListener("propertysetu.wallet", (event: { balance: number }) => setWalletBalance(event.balance)); return () => subscription.remove(); }, []);
   const [savedId, setSavedId] = useState(propertyId);
   const [listingStatus, setListingStatus] = useState("");
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -239,13 +242,9 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   }
 
   async function fillFromPhoto() {
+    if (!await confirmDataUse("Read property details from a photo", "The photo you select will be sent to Google Gemini to suggest listing details. Avoid sensitive documents and review the result before publishing. You can fill the form manually instead.")) return;
     if (!auth.token) {
       setError(t.listing.signInPhotoRead);
-      return;
-    }
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError(t.listing.photoPermission);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
@@ -272,11 +271,6 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       setError(t.listing.signInPhotos);
       return;
     }
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError(t.listing.photoPermission);
-      return;
-    }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7, allowsMultipleSelection: true });
     if (result.canceled) return;
     setBusy(true);
@@ -293,11 +287,6 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   async function pickVideo() {
     if (!auth.token) {
       setError(t.listing.signInVideo);
-      return;
-    }
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError(t.listing.photoPermission);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["videos"], videoMaxDuration: 60 });
@@ -481,20 +470,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         const fee = paymentDue();
         let balance = walletBalance ?? 0;
         if (balance < fee) {
-          const order = await api.walletOrder(Math.max(1, Math.ceil(fee - balance)), auth.token);
-          const paid = await pay({
-            keyId: order.key_id,
-            orderId: order.order_id,
-            amount: order.amount,
-            currency: order.currency,
-            description: order.description,
-            email: auth.session?.user.email || undefined,
-          });
-          const credited = await api.walletVerify({
-            razorpay_order_id: paid.razorpay_order_id,
-            razorpay_payment_id: paid.razorpay_payment_id,
-            razorpay_signature: paid.razorpay_signature,
-          }, auth.token);
+          const credited = await topUp(Math.max(1, Math.ceil(fee - balance)));
           balance = credited.balance;
           setWalletBalance(balance);
         }
@@ -537,6 +513,7 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
     const due = paymentDue();
     const needsPay = due > 0;
     if (!needsPay) return t.common.save;
+    if (Platform.OS === "android") return (walletBalance ?? 0) < due ? "Continue with Google Play" : `Use ${due} listing credits`;
     if ((walletBalance ?? 0) < due) return fill(t.listing.payNow, { amount: due });
     return fill(t.listing.useWallet, { amount: due });
   }

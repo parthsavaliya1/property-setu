@@ -55,13 +55,13 @@ function slotsForScreen(itemHeight: number, columns: number) {
   return rows * columns;
 }
 
-export function PropertyGridSkeleton({ width, count }: { width: number; count?: number }) {
+export function PropertyGridSkeleton({ width, count, borderRadius = 20 }: { width: number; count?: number; borderRadius?: number }) {
   const opacity = useSkeletonPulse();
   const total = count ?? slotsForScreen(200, 2);
   return (
     <View style={{ width: "100%", alignSelf: "stretch", flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
       {Array.from({ length: total }, (_, index) => (
-        <View key={index} style={{ width, flexGrow: 1, flexShrink: 1, flexBasis: width, maxWidth: "100%", backgroundColor: colors.card, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: colors.line }}>
+        <View key={index} style={{ width, flexGrow: 1, flexShrink: 1, flexBasis: width, maxWidth: "100%", backgroundColor: colors.card, borderRadius, overflow: "hidden", borderWidth: 1, borderColor: colors.line }}>
           <Animated.View style={{ height: 120, backgroundColor: "#E4DDD2", opacity }} />
           <View style={{ padding: 10, gap: 8 }}>
             <Animated.View style={{ height: 12, width: "78%", borderRadius: 6, backgroundColor: "#E4DDD2", opacity }} />
@@ -207,11 +207,11 @@ export function Field({ label, spoken, ...props }: { label?: string; spoken?: Sp
   );
 }
 
-export function PageHeader({ title, subtitle, onBack, right }: { title: string; subtitle?: string; onBack?: () => void; right?: ReactNode }) {
+export function PageHeader({ title, subtitle, onBack, right, compact = false }: { title: string; subtitle?: string; onBack?: () => void; right?: ReactNode; compact?: boolean }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 14, backgroundColor: colors.page, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center" }}>
+    <View style={{ paddingTop: insets.top + (compact ? 0 : 8), paddingHorizontal: 20, paddingBottom: compact ? 4 : 14, backgroundColor: colors.page, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", alignItems: "center" }}>
       <Pressable
         onPress={onBack ?? (() => navigation.goBack())}
         hitSlop={8}

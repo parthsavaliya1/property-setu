@@ -1,3 +1,5 @@
+import { BlockedUsers } from "../components/BlockedUsers";
+import { Alert, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useState } from "react";
@@ -26,7 +28,7 @@ const FEATURES: { icon: keyof typeof Ionicons.glyphMap; key: "browse" | "search"
 ];
 
 export function AboutScreen({ onDeleted, onSignIn, onPrivacy }: { onDeleted: () => void; onSignIn: () => void; onPrivacy: () => void }) {
-  const { session, deleteAccount } = useAuth();
+  const { session, token, deleteAccount } = useAuth();
   const { t } = useI18n();
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -96,6 +98,7 @@ export function AboutScreen({ onDeleted, onSignIn, onPrivacy }: { onDeleted: () 
           <Ionicons name="chevron-forward" size={18} color={colors.faint} />
         </Pressable>
 
+        <BlockedUsers token={token} />
         <Text style={{ textAlign: "center", fontSize: 14, color: colors.faint, marginTop: 8 }}>{fill(t.about.version, { version })}</Text>
 
         <View style={{ marginTop: 28, paddingTop: 20, borderTopWidth: 1, borderTopColor: "#E5E7EB", alignItems: "center" }}>
@@ -110,6 +113,12 @@ export function AboutScreen({ onDeleted, onSignIn, onPrivacy }: { onDeleted: () 
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#9CA3AF", textDecorationLine: "underline" }}>
               {busy ? t.common.deleting : t.about.deleteAccount}
             </Text>
+          </Pressable>
+          <Pressable accessibilityRole="link" onPress={() => { Linking.openURL("http://localhost:8080/delete-account").catch(() => Alert.alert("Could not open page", "Please try again.")); }} style={{ paddingVertical: 10, paddingHorizontal: 8 }}>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.muted, textDecorationLine: "underline" }}>Delete account on the web</Text>
+          </Pressable>
+          <Pressable accessibilityRole="link" onPress={() => { Linking.openURL("http://localhost:8080/terms").catch(() => Alert.alert("Could not open page", "Please make sure the website is running and try again.")); }} style={{ paddingVertical: 10, paddingHorizontal: 8 }}>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.muted, textDecorationLine: "underline" }}>Terms and community rules</Text>
           </Pressable>
         </View>
       </ScrollView>

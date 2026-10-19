@@ -3,6 +3,7 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { PROPERTY_PAGE_SIZE, appendProperties } from "./api";
 import { getRemoteSettings, subscribeRemoteSettings } from "./remoteConfig";
 import type { PropertyCard } from "../types/database";
+import { subscribeBlockChanges } from "./blockChanges";
 
 export function nearScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>, axis: "x" | "y" = "y") {
   const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
@@ -86,6 +87,14 @@ export function usePagedProperties(
   useEffect(() => {
     void run("load");
   }, [apiUrl, run, signature]);
+
+  useEffect(() => subscribeBlockChanges(({ userId, blocked }) => {
+    // Invalidate pending pages so an older response cannot restore blocked rows.
+    paging.current.gen += 1;
+    flight.current = false;
+    if (blocked) setItems(current => current.filter(item => item.owner_id !== userId));
+    void run("refresh");
+  }), [run]);
 
   const refresh = useCallback(() => run("refresh"), [run]);
   const loadMore = useCallback(() => run("more"), [run]);

@@ -1,3 +1,5 @@
+import { confirmDataUse } from "../lib/confirmDataUse";
+let voiceDisclosureAccepted = false;
 import { Ionicons } from "@expo/vector-icons";
 import { requireOptionalNativeModule } from "expo";
 import { useEffect, useRef, useState } from "react";
@@ -93,6 +95,10 @@ function useMic({ spoken = "text", onValue, value = "" }: VoiceProps & { value?:
       Alert.alert(t.common.micUnavailable);
       return;
     }
+    if (!voiceDisclosureAccepted) {
+      voiceDisclosureAccepted = await confirmDataUse("Use voice input", "Your device speech service may send audio to its provider to turn speech into text. PropertySetu does not save audio recordings. You can type instead.");
+      if (!voiceDisclosureAccepted) return;
+    }
     const permission = await speech.requestPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(t.common.micDenied);
@@ -116,10 +122,12 @@ function useMic({ spoken = "text", onValue, value = "" }: VoiceProps & { value?:
   return { listening, toggle, label: listening ? t.common.listening : t.common.speak };
 }
 
-export function VoiceButton({ spoken, onValue, value, style }: VoiceProps & { value?: string; style?: StyleProp<ViewStyle> }) {
+export function VoiceButton({ spoken, onValue, value, style, disabled = false }: VoiceProps & { value?: string; style?: StyleProp<ViewStyle>; disabled?: boolean }) {
   const { listening, toggle, label } = useMic({ spoken, onValue, value });
   return (
     <Pressable
+      disabled={disabled}
+      accessibilityState={{ disabled }}
       onPress={toggle}
       hitSlop={8}
       accessibilityRole="button"

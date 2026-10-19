@@ -219,6 +219,8 @@ export type NotificationItem = {
 };
 
 export type ChatThread = {
+  blocked_by_me?: boolean;
+  messaging_blocked?: boolean;
   id: string;
   property_id: string;
   buyer_id: string;

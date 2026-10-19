@@ -1,3 +1,4 @@
+import { SafetyActions } from "../components/SafetyActions";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -280,6 +281,7 @@ export function HomeScreen({
         key={item.id}
         item={item}
         width={width}
+        borderRadius={12}
         saved={isSaved(item.id, item.is_favorite)}
         onPress={() => onOpen(item.slug || item.id)}
         onSave={() => toggleSaved(item)}
@@ -344,7 +346,7 @@ export function HomeScreen({
       </View>
       <HomeBanner onPress={() => onSearch("all")} />
       {error ? <Text style={[styles.error, { margin: 16 }]}>{error}</Text> : null}
-      {loading ? <View style={{ width: "100%", paddingHorizontal: 20, marginTop: 24 }}><PropertyGridSkeleton width={cardWidth} /></View> : null}
+      {loading ? <View style={{ width: "100%", paddingHorizontal: 20, marginTop: 24 }}><PropertyGridSkeleton width={cardWidth} borderRadius={12} /></View> : null}
       {!loading && premiumItems.length > 0 ? (
         <>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 20, marginTop: 28, marginBottom: 12 }}>
@@ -1106,7 +1108,23 @@ export function DetailsScreen({ id, onSchedule, onChat, onEdit, onInquiries, onM
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <ScrollView showsVerticalScrollIndicator={false} style={{ backgroundColor: colors.page }} contentContainerStyle={{ paddingBottom: 168, flexGrow: 1, backgroundColor: colors.page }}>
+      <PageHeader compact title={item.title} right={
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Share property" onPress={() => { Share.share({ message: `${item.title}\n${place}\n${inr(item.price)}` }).catch(() => setNote("Could not share this property. Please try again.")); }} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="share-social-outline" size={22} color={colors.ink} />
+          </Pressable>
+          {mine ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Delete listing" onPress={() => { setDeleteError(""); setAskDelete(true); }} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="trash-outline" size={22} color={colors.danger} />
+            </Pressable>
+          ) : <SafetyActions
+            userId={item.owner_id} propertyId={item.id} token={token} directReport
+            onSignIn={() => requireLogin("Sign in to report or block a user.")}
+            onChanged={() => navigation.goBack()}
+          />}
+        </View>
+      } />
+      <ScrollView contentInsetAdjustmentBehavior="never" showsVerticalScrollIndicator={false} style={{ backgroundColor: colors.page }} contentContainerStyle={{ paddingBottom: 168, flexGrow: 1, backgroundColor: colors.page }}>
         <View style={{ width, height: 340, backgroundColor: "#E7E0D6" }}>
           {photos.length ? (
             <ScrollView
@@ -1134,13 +1152,6 @@ export function DetailsScreen({ id, onSchedule, onChat, onEdit, onInquiries, onM
               </View>
             </View>
           ) : null}
-          <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + 8, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <RoundIcon name="chevron-back" onPress={() => navigation.goBack()} />
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              {mine ? <RoundIcon name="trash-outline" onPress={() => { setDeleteError(""); setAskDelete(true); }} /> : null}
-              <RoundIcon name="share-social-outline" onPress={() => Share.share({ message: `${item.title}\n${place}\n${inr(item.price)}` })} />
-            </View>
-          </View>
           {photos.length > 1 ? (
             <View pointerEvents="none" style={{ position: "absolute", bottom: 14, left: 0, right: 0, alignItems: "center" }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 6 }}>
@@ -1302,14 +1313,6 @@ export function DetailsScreen({ id, onSchedule, onChat, onEdit, onInquiries, onM
         </Modal>
       ) : null}
     </View>
-  );
-}
-
-function RoundIcon({ name, onPress }: { name: keyof typeof Ionicons.glyphMap; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(20,20,20,0.72)", alignItems: "center", justifyContent: "center" }}>
-      <Ionicons name={name} size={20} color="white" />
-    </Pressable>
   );
 }
 

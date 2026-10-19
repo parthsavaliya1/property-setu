@@ -1,3 +1,4 @@
+import { DeviceEventEmitter, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
@@ -14,7 +15,7 @@ import { getCopy, getLocale } from "../i18n/active";
 import { fill } from "../i18n/format";
 import { api, inr, listingPrice, PROPERTY_PAGE_SIZE, type PropertyStats } from "../lib/api";
 import { nearScrollEnd, usePagedProperties } from "../lib/paging";
-import { useRazorpay } from "../components/RazorpayCheckout";
+import { useWalletTopUp } from "../lib/useWalletTopUp";
 import { buttonShadow, colors } from "../theme";
 import type { Inquiry, NotificationItem, PropertyCard, Visit, WalletTransaction } from "../types/database";
 
@@ -107,7 +108,7 @@ const walletAmounts = [20, 30, 100, 204, 306, 500];
 export function WalletScreen({ onHistory }: { onHistory: () => void }) {
   const { token, session } = useAuth();
   const { t } = useI18n();
-  const pay = useRazorpay();
+  const topUp = useWalletTopUp();
   const [balance, setBalance] = useState(0);
   const [amount, setAmount] = useState("100");
   const [busy, setBusy] = useState(false);
@@ -118,6 +119,8 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
     if (!token) return;
     api.wallet(token).then((wallet) => setBalance(wallet.balance)).catch((err) => setError(err.message));
   }, [token]);
+
+  useEffect(() => { const subscription = DeviceEventEmitter.addListener("propertysetu.wallet", (event: { balance: number }) => setBalance(event.balance)); return () => subscription.remove(); }, []);
 
   async function addMoney(value?: number) {
     if (!token) return;
@@ -130,22 +133,9 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
     setError("");
     setNote("");
     try {
-      const order = await api.walletOrder(rupees, token);
-      const paid = await pay({
-        keyId: order.key_id,
-        orderId: order.order_id,
-        amount: order.amount,
-        currency: order.currency,
-        description: order.description,
-        email: session?.user.email || undefined,
-      });
-      const result = await api.walletVerify({
-        razorpay_order_id: paid.razorpay_order_id,
-        razorpay_payment_id: paid.razorpay_payment_id,
-        razorpay_signature: paid.razorpay_signature,
-      }, token);
+      const result = await topUp(rupees);
       setBalance(result.balance);
-      setNote(fill(t.account.added, { amount: inr(rupees) }));
+      setNote(Platform.OS === "android" ? `${result.credited} listing credits added.` : fill(t.account.added, { amount: inr(result.credited) }));
     } catch (err) {
       setError(err instanceof Error ? err.message : t.account.addFailed);
     } finally {
@@ -155,21 +145,21 @@ export function WalletScreen({ onHistory }: { onHistory: () => void }) {
 
   return (
     <KeyboardScreen style={{ backgroundColor: colors.page }}>
-      <PageHeader title={t.account.wallet} />
+      <PageHeader title={Platform.OS === "android" ? "Listing credits" : t.account.wallet} />
       <KeyboardFormScroll contentContainerStyle={{ padding: 20, paddingBottom: 28 }}>
         <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.line }}>
           <Text style={{ color: colors.muted, fontWeight: "600" }}>{t.account.balance}</Text>
-          <Text style={{ color: colors.ink, fontSize: 32, fontWeight: "800", marginTop: 6 }}>{inr(balance)}</Text>
-          <Text style={{ color: colors.muted, marginTop: 8 }}>{t.account.walletHint}</Text>
+          <Text style={{ color: colors.ink, fontSize: 32, fontWeight: "800", marginTop: 6 }}>{Platform.OS === "android" ? `${balance} credits` : inr(balance)}</Text>
+          <Text style={{ color: colors.muted, marginTop: 8 }}>{Platform.OS === "android" ? "Credits pay for PropertySetu listing services and cannot be withdrawn. Google Play shows the exact pack price before payment. One credit covers ₹1 in listing-service fees." : t.account.walletHint}</Text>
         </View>
-        <Text style={{ fontWeight: "800", color: colors.ink, marginTop: 24, marginBottom: 8 }}>{t.account.addMoney}</Text>
+        <Text style={{ fontWeight: "800", color: colors.ink, marginTop: 24, marginBottom: 8 }}>{Platform.OS === "android" ? "Minimum credits to add" : t.account.addMoney}</Text>
         <VoiceTextInput value={amount} onChangeText={setAmount} onFocus={requestScrollFocusedInput} keyboardType="number-pad" spoken="amount" placeholder={t.account.amountPlaceholder} placeholderTextColor={colors.faint} style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, height: 52, color: colors.ink }} />
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
           {walletAmounts.map((value) => {
             const selected = amount === String(value);
             return (
               <Pressable key={value} onPress={() => setAmount(String(value))} style={{ backgroundColor: selected ? colors.primary : colors.card, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: selected ? colors.primary : colors.line }}>
-                <Text style={{ color: selected ? colors.white : colors.muted, fontWeight: "700" }}>{inr(value)}</Text>
+                <Text style={{ color: selected ? colors.white : colors.muted, fontWeight: "700" }}>{Platform.OS === "android" ? `${value} credits` : inr(value)}</Text>
               </Pressable>
             );
           })}
@@ -422,7 +412,7 @@ function propertyActions(item: PropertyCard, onEdit: (id: string) => void, onDel
 export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) => void; onEdit: (id: string) => void }) {
   const { token, session } = useAuth();
   const { t } = useI18n();
-  const pay = useRazorpay();
+  const topUp = useWalletTopUp();
   const [tab, setTab] = useState<(typeof listingTabs)[number]["id"]>("active");
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
@@ -455,20 +445,7 @@ export function MyPropertiesScreen({ onOpen, onEdit }: { onOpen: (id: string) =>
       const fee = listingPrice(badge, "month");
       const wallet = await api.wallet(token);
       if (wallet.balance < fee) {
-        const order = await api.walletOrder(Math.max(1, Math.ceil(fee - wallet.balance)), token);
-        const paid = await pay({
-          keyId: order.key_id,
-          orderId: order.order_id,
-          amount: order.amount,
-          currency: order.currency,
-          description: order.description,
-          email: session?.user.email || undefined,
-        });
-        await api.walletVerify({
-          razorpay_order_id: paid.razorpay_order_id,
-          razorpay_payment_id: paid.razorpay_payment_id,
-          razorpay_signature: paid.razorpay_signature,
-        }, token);
+        await topUp(Math.max(1, Math.ceil(fee - wallet.balance)));
       }
       await api.walletSpend(item.id, badge, "month", token);
       setTab("active");

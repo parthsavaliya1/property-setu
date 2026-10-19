@@ -119,6 +119,7 @@ function listingBadge(item: PropertyCard, premium: string) {
 export function PropertyGridCard({
   item,
   width,
+  borderRadius = 20,
   saved,
   onPress,
   onSave,
@@ -127,6 +128,7 @@ export function PropertyGridCard({
 }: {
   item: PropertyCard;
   width: number;
+  borderRadius?: number;
   saved?: boolean;
   onPress: () => void;
   onSave?: () => void;
@@ -137,7 +139,7 @@ export function PropertyGridCard({
   const place = [item.locality, item.city].filter(Boolean).join(", ") || t.common.locationMissing;
   const closed = closedLabel(item.status, t.account.sold, t.account.rented);
   return (
-    <Pressable onPress={onPress} style={{ width, backgroundColor: colors.card, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
+    <Pressable onPress={onPress} style={{ width, backgroundColor: colors.card, borderRadius, overflow: "hidden", borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
       <View style={{ height: 120, width: "100%", backgroundColor: "#E7D9C8" }}>
         {item.cover_image ? <Image source={{ uri: item.cover_image }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : null}
         <ClosedStamp label={closed} />

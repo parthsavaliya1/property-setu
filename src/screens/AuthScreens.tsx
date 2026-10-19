@@ -1,3 +1,5 @@
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import type { RootStackParamList } from "../navigation";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
@@ -248,6 +250,7 @@ export function LoginScreen({ onBrowse, onPrivacy }: { onBrowse: () => void; onP
 
 function PrivacyConsent({ accepted, onToggle, onPrivacy }: { accepted: boolean; onToggle: () => void; onPrivacy: () => void }) {
   const { t } = useI18n();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   return (
     <View style={{ flexDirection: "row", alignItems: "flex-start", marginTop: 16 }}>
       <Pressable
@@ -271,7 +274,8 @@ function PrivacyConsent({ accepted, onToggle, onPrivacy }: { accepted: boolean; 
       <Text style={{ flex: 1, marginLeft: 10, color: colors.muted, fontSize: 14, lineHeight: 22, includeFontPadding: false }}>
         <Text onPress={onToggle}>{t.auth.agreeBefore}</Text>
         <Text onPress={onPrivacy} style={{ color: colors.primary, fontWeight: "800", textDecorationLine: "underline" }}>{t.auth.privacyPolicy}</Text>
-        <Text onPress={onToggle}>{t.auth.agreeAfter}</Text>
+        <Text onPress={onToggle}>{t.auth.agreeAfter} and </Text>
+        <Text onPress={() => navigation.navigate("Terms")} style={{ color: colors.primary, textDecorationLine: "underline" }}>Terms and community rules</Text>
       </Text>
     </View>
   );

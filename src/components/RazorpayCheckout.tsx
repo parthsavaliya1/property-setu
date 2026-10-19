@@ -143,6 +143,7 @@ export function RazorpayHost({ children }: { children: ReactNode }) {
   }
 
   async function pay(next: RazorpayOrder) {
+    if (Platform.OS === "android") throw new Error("Use Google Play Billing for Android listing credits.");
     if (Platform.OS === "web") return openWebCheckout(next);
     return new Promise<RazorpaySuccess>((resolve, reject) => {
       pending.current = { resolve, reject };

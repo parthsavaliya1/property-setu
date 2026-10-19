@@ -3,7 +3,6 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { AppState } from "react-native";
 import { api, type AuthUser } from "../lib/api";
 import { registerPushToken } from "../lib/push";
-import { startGoogleSignIn } from "../lib/google";
 import { applyServerListingSettings, loadRemoteConfig, subscribeRemoteSettings } from "../lib/remoteConfig";
 import type { Me } from "../types/database";
 
@@ -23,7 +22,6 @@ type AuthValue = {
   refreshMe: () => Promise<void>;
   sendOtp: (phone: string, create: boolean) => Promise<{ sessionId: string; demo: boolean }>;
   verifyOtp: (phone: string, otp: string, sessionId: string, create: boolean, fullName?: string) => Promise<void>;
-  signInGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
 };
@@ -118,11 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     verifyOtp: async (phone, otp, sessionId, create, fullName) => {
       const result = await api.verifyOtp(phone, otp, sessionId, create, fullName);
-      await store({ access_token: result.token, user: result.user });
-    },
-    signInGoogle: async () => {
-      const proof = await startGoogleSignIn();
-      const result = await api.google(proof);
       await store({ access_token: result.token, user: result.user });
     },
     signOut: async () => {

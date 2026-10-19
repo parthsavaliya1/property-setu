@@ -18,7 +18,7 @@ function coordinates(item: PropertyCard) {
 
 function androidMapsReady() {
   if (Platform.OS !== "android") return true;
-  return Boolean(Constants.expoConfig?.android?.config?.googleMaps?.apiKey);
+  return Boolean(Constants.expoConfig?.extra?.mapsConfigured || Constants.expoConfig?.android?.config?.googleMaps?.apiKey);
 }
 
 function pinPrice(value: string | null) {

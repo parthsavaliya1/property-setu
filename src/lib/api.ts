@@ -3,6 +3,7 @@ import { File } from "expo-file-system";
 import type { Category, ChatMessage, ChatThread, Inquiry, Me, NotificationItem, PropertyCard, PropertyDetail, Visit, WalletTransaction } from "../types/database";
 import { getCopy } from "../i18n/active";
 import { getRemoteSettings } from "./remoteConfig";
+import { publishBlockChange } from "./blockChanges";
 
 export const PROPERTY_PAGE_SIZE = 20;
 
@@ -23,13 +24,14 @@ function usableHost(value?: string | null) {
 
 // Compiled-in API address, same idea as vadi-hisab BASE_URL in utils/api.ts.
 // EXPO_PUBLIC_API_URL can still override this for a different machine.
-const DEFAULT_API_URL = "http://192.168.1.10:4000";
+const DEFAULT_API_URL = "https://property-setu-backend.vercel.app";
 
 export function apiBase() {
   const remote = getRemoteSettings().apiUrl;
-  if (remote) return remote;
+  if (remote && (__DEV__ || remote.startsWith("https://"))) return remote;
   const configured = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
-  if (configured && !configured.includes("://0.0.0.0")) return configured;
+  if (configured && !configured.includes("://0.0.0.0") && (__DEV__ || configured.startsWith("https://"))) return configured;
+  if (!__DEV__) return DEFAULT_API_URL;
   const host = usableHost(Constants.expoConfig?.hostUri) || usableHost(Constants.linkingUri);
   if (host) return `http://${host}:4000`;
   return DEFAULT_API_URL;
@@ -39,17 +41,25 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   const headers = new Headers(options.headers);
   if (options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  // const base = apiBase();
+  const base = "http://192.168.29.55:4000";
+
+  console.log("base", base);
+  // Log request identity only: never include headers, OTPs, bodies or query values.
+  const requestInfo = { method: options.method || "GET", server: base, path: `/api${path.split("?")[0]}` };
   let response: Response;
   try {
-    response = await fetch(`${apiBase()}/api${path}`, { ...options, headers });
+    response = await fetch(`${base}/api${path}`, { ...options, headers });
   } catch (err) {
+    if (__DEV__) console.warn("[api connection failed]", requestInfo);
     const reason = err instanceof Error ? err.message : "Could not connect";
-    throw new Error(`Could not connect to the server at ${apiBase()}. ${reason}`);
+    throw new Error(`Could not connect to the server at ${base}. ${reason}`);
   }
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const payload = body as { error?: string; code?: string };
+    if (__DEV__) console.warn("[api request failed]", { ...requestInfo, status: response.status, code: payload.code });
     throw new ApiError(payload.error || "Request failed", response.status, payload.code);
   }
   return body as T;
@@ -239,14 +249,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ phone, otp, sessionId, create, full_name: fullName || undefined }),
     }),
-  signup: (email: string, password: string, fullName: string) =>
-    request<{ verification_required: boolean; message: string }>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password, full_name: fullName }) }),
-  resendVerification: (email: string) =>
-    request<{ message: string }>("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }),
-  login: (email: string, password: string) =>
-    request<{ token: string; user: AuthUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
-  google: (proof: { code: string; code_verifier: string; redirect_uri: string; client_id: string }) =>
-    request<{ token: string; user: AuthUser }>("/auth/google", { method: "POST", body: JSON.stringify(proof) }),
   banners: () => requestList<{ id: string; image_url: string }>("/banners"),
   categories: () => requestList<Category>("/categories"),
   amenities: () => requestList<{ id: string; name: string }>("/amenities"),
@@ -277,6 +279,16 @@ export const api = {
   report: (id: string, payload: unknown, token: string) =>
     request(`/properties/${id}/reports`, { method: "POST", body: JSON.stringify(payload) }, token),
   me: (token: string) => request<Me>("/me", {}, token),
+  blocks: (token: string) => requestList<{ blocked_id: string; full_name: string | null }>("/me/blocks", {}, token),
+  blockUser: async (id: string, token: string) => {
+    await request<void>(`/users/${id}/block`, { method: "PUT" }, token);
+    publishBlockChange({ userId: id, blocked: true });
+  },
+  unblockUser: async (id: string, token: string) => {
+    await request<void>(`/users/${id}/block`, { method: "DELETE" }, token);
+    publishBlockChange({ userId: id, blocked: false });
+  },
+  reportUser: (id: string, payload: { reason: string; description?: string; conversation_id?: string; message_id?: string }, token: string) => request(`/users/${id}/reports`, { method: "POST", body: JSON.stringify(payload) }, token),
   updateMe: (payload: unknown, token: string) => request("/me", { method: "PATCH", body: JSON.stringify(payload) }, token),
   deleteMe: (token: string) => request<void>("/me", { method: "DELETE" }, token),
   notifications: (token: string) => requestList<NotificationItem>("/notifications", {}, token),
@@ -311,6 +323,8 @@ export const api = {
     token: string
   ) => request<{ ok: boolean; expires_at?: string }>("/payments/verify", { method: "POST", body: JSON.stringify(payload) }, token),
   wallet: (token: string) => request<{ balance: number }>("/wallet", {}, token),
+  playProducts: (token: string) => request<{ configured: boolean; account_id: string; products: { product_id: string; credits: number }[] }>("/billing/play/products", {}, token),
+  verifyPlayPurchase: (productId: string, purchaseToken: string, token: string) => request<{ ok: boolean; balance: number; credited: number }>("/billing/play/verify", { method: "POST", body: JSON.stringify({ product_id: productId, purchase_token: purchaseToken }) }, token),
   walletHistory: (token: string) => requestList<WalletTransaction>("/wallet/transactions", {}, token),
   walletOrder: (amount: number, token: string) =>
     request<{ key_id: string; order_id: string; amount: number; currency: string; description: string }>(
