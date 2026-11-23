@@ -8,6 +8,7 @@ const kindKeys: Record<string, keyof ReturnType<typeof getCopy>["kinds"]> = {
   plot: "plot",
   land: "land",
   "residential-plot": "plot",
+  "commercial-plot": "commercialPlot",
   "agricultural-land": "land",
   office: "office",
   warehouse: "warehouse",

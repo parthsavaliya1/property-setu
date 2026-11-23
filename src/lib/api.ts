@@ -22,15 +22,18 @@ function usableHost(value?: string | null) {
   return host;
 }
 
-// Compiled-in API address, same idea as vadi-hisab BASE_URL in utils/api.ts.
-// EXPO_PUBLIC_API_URL can still override this for a different machine.
+// Used if Firebase is unavailable or has no valid API URL.
 const DEFAULT_API_URL = "https://property-setu-backend.vercel.app";
 
 export function apiBase() {
+  // Edit .env.development.local to use a local API in Expo development.
+  // Production ignores this override and uses Firebase Remote Config.
+  if (__DEV__) {
+    const configured = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, "").replace(/\/api$/, "");
+    if (configured && /^https?:\/\//i.test(configured) && !configured.includes("://0.0.0.0")) return configured;
+  }
   const remote = getRemoteSettings().apiUrl;
   if (remote && (__DEV__ || remote.startsWith("https://"))) return remote;
-  const configured = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
-  if (configured && !configured.includes("://0.0.0.0") && (__DEV__ || configured.startsWith("https://"))) return configured;
   if (!__DEV__) return DEFAULT_API_URL;
   const host = usableHost(Constants.expoConfig?.hostUri) || usableHost(Constants.linkingUri);
   if (host) return `http://${host}:4000`;

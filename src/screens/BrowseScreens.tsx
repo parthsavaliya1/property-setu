@@ -1,11 +1,12 @@
-import type { ComponentRef } from "react";
+import type { ComponentProps, ComponentRef } from "react";
 import { SafetyActions } from "../components/SafetyActions";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Linking, Modal, PanResponder, Pressable, RefreshControl, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Linking, Modal, PanResponder, Platform, Pressable, RefreshControl, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { KeyboardScreen } from "../components/keyboard";
 import { VoiceTextInput } from "../components/VoiceField";
 import { PropertyGridCard, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
@@ -24,10 +25,11 @@ import { useBrowseCity } from "../lib/location";
 import { useRequireLogin } from "../context/LoginGate";
 import { buttonShadow, cardShadow, colors } from "../theme";
 import { deviceType } from "../lib/supabase";
+import { homeCategorySlugs } from "../lib/propertyCategories";
 import type { PropertyCard, PropertyDetail } from "../types/database";
 
-const BANNER_HEIGHT = 118;
-const fallbackBanner = require("../../assets/home-banner.jpg");
+const BANNER_HEIGHT = 142;
+const fallbackBanner = require("../../assets/dream-home-banner.jpg");
 type BannerSlide = { id: string; image_url?: string; local?: boolean };
 
 function HomeBanner({ onPress }: { onPress: () => void }) {
@@ -70,7 +72,7 @@ function HomeBanner({ onPress }: { onPress: () => void }) {
   }
 
   return (
-    <View style={{ marginHorizontal: 20, marginTop: 24, width: frameWidth, height: BANNER_HEIGHT, borderRadius: 20, overflow: "hidden", backgroundColor: colors.secondary }}>
+    <View style={{ marginHorizontal: 20, marginTop: 20, width: frameWidth, height: BANNER_HEIGHT, borderRadius: 20, overflow: "hidden", backgroundColor: colors.secondary }}>
       <FlatList
         ref={listRef}
         data={slides}
@@ -86,11 +88,12 @@ function HomeBanner({ onPress }: { onPress: () => void }) {
           <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={t.home.dream} style={{ width: frameWidth, height: BANNER_HEIGHT }}>
             {item.local ? <>
               <Image source={fallbackBanner} style={{ width: frameWidth, height: BANNER_HEIGHT }} resizeMode="cover" />
-              <View style={{ position: "absolute", left: 14, top: 0, bottom: 0, width: "48%", justifyContent: "center" }}>
-                <Text numberOfLines={2} style={{ color: "white", fontSize: 16, lineHeight: 20, fontWeight: "800" }}>{t.home.dream}</Text>
-                <Text numberOfLines={1} style={{ color: "rgba(255,255,255,0.9)", marginTop: 2, fontSize: 12 }}>{t.home.dreamSub}</Text>
-                <View style={{ alignSelf: "flex-start", marginTop: 8, backgroundColor: "white", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 }}>
-                  <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>{t.home.explore}</Text>
+              <LinearGradient pointerEvents="none" colors={[colors.primaryDark, `${colors.primaryDark}B3`, `${colors.primaryDark}00`]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} />
+              <View style={{ position: "absolute", left: 18, top: 0, bottom: 0, width: "54%", justifyContent: "center" }}>
+                <Text numberOfLines={3} style={{ color: colors.white, fontSize: 24, lineHeight: 26, fontFamily: Platform.OS === "ios" ? "Georgia" : "serif", fontWeight: "500" }}>{t.home.chapter}</Text>
+
+                <View style={{ alignSelf: "flex-start", marginTop: 8, backgroundColor: colors.highlight, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 5 }}>
+                  <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>{t.home.explore} →</Text>
                 </View>
               </View>
             </> : <Image source={{ uri: item.image_url }} style={{ width: frameWidth, height: BANNER_HEIGHT }} resizeMode="cover" />}
@@ -106,7 +109,10 @@ function chipText(query: string) {
   if (!query) return text.kinds.all;
   if (query === "listing_type=sale") return text.home.buy;
   if (query === "listing_type=rent") return text.home.rent;
-  if (query === "category=residential-plot") return text.kinds.plot;
+  if (query === "category=residential-plot" || query === "category=commercial-plot") return text.kinds.plot;
+  if (query === "category=commercial") return text.home.commercial;
+  if (query === "category=office") return text.kinds.office;
+  if (query === "category=warehouse") return text.kinds.warehouse;
   if (query === "category=agricultural-land") return text.kinds.land;
   if (query === "category=house") return text.kinds.house;
   if (query === "category=apartment") return text.kinds.apartment;
@@ -146,18 +152,11 @@ const kindChips = [
   { label: "Shop", query: "category=shop" },
 ];
 
-function homeCategories() {
-  return [
-    { label: "Buy", query: "listing_type=sale", bg: colors.primarySoft, color: colors.primary, icon: "home" as const },
-    { label: "Rent", query: "listing_type=rent", bg: colors.secondary, color: colors.primaryDark, icon: "home-city" as const },
-    { label: "Plot", query: "category=residential-plot", bg: colors.highlight, color: colors.warning, icon: "checkbox-blank-outline" as const },
-    { label: "Land", query: "category=agricultural-land", bg: colors.primarySoft, color: colors.primaryDark, icon: "upload" as const },
-    { label: "House", query: "category=house", bg: colors.secondary, color: colors.primary, icon: "home-outline" as const },
-    { label: "Apartment", query: "category=apartment", bg: colors.page, color: colors.muted, icon: "office-building" as const },
-    { label: "Villa", query: "category=villa", bg: colors.highlight, color: colors.warning, icon: "home-variant" as const },
-    { label: "Shop", query: "category=shop", bg: colors.secondary, color: colors.muted, icon: "storefront-outline" as const },
-  ];
-}
+const homeCategoryIcons: Record<string, ComponentProps<typeof MaterialCommunityIcons>["name"]> = {
+  house: "home-outline", apartment: "office-building-outline", villa: "home-outline",
+  "residential-plot": "map-marker-outline", "agricultural-land": "sprout-outline",
+  shop: "storefront-outline", office: "office-building-outline", "commercial-plot": "map-marker-outline", warehouse: "warehouse",
+};
 
 function LocationPrompt({ denied, canAskAgain, onAllow }: { denied: boolean; canAskAgain: boolean; onAllow: () => void }) {
   const { t } = useI18n();
@@ -188,12 +187,15 @@ export function HomeScreen({
   onNotify,
   onWallet,
   onOpenMenu,
+  onApplyFilters,
 }: {
   onOpen: (id: string) => void;
   onSearch: (query: string) => void;
   onNotify?: () => void;
   onWallet?: () => void;
   onOpenMenu: () => void;
+  onOffers: () => void;
+  onApplyFilters: (request: SearchFilterRequest) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
@@ -202,7 +204,28 @@ export function HomeScreen({
   const requireLogin = useRequireLogin();
   const [query, setQuery] = useState("");
   const [unread, setUnread] = useState(0);
-  const cardWidth = (Dimensions.get("window").width - 20 * 2 - 12) / 2;
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = (screenWidth - 20 * 2 - 12) / 2;
+  const subcategoryTabWidth = (screenWidth - 40 - 12) / 3;
+  const premiumCardWidth = screenWidth - 40;
+  const [premiumIndex, setPremiumIndex] = useState(0);
+  const [homeFiltersOpen, setHomeFiltersOpen] = useState(false);
+  const [homeFilters, setHomeFilters] = useState<SearchFilters>({ ...emptySearchFilters });
+  const [homeIntent, setHomeIntent] = useState("sale");
+  const [homeCategory, setHomeCategory] = useState("");
+  const premiumScrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  function selectHomeIntent(intent: string) {
+    setHomeIntent(intent);
+    if (intent === "commercial" || homeIntent === "commercial") setHomeCategory("");
+    setPremiumIndex(0);
+    premiumScrollRef.current?.scrollTo({ x: 0, animated: false });
+  }
+
+  function selectHomeCategory(category: string) {
+    setHomeCategory(category);
+    setPremiumIndex(0);
+    premiumScrollRef.current?.scrollTo({ x: 0, animated: false });
+  }
 
   const profileCity = cityName(me?.profile?.city);
   const { city, ready, denied, canAskAgain, retry } = useBrowseCity(profileCity);
@@ -214,18 +237,21 @@ export function HomeScreen({
       listing_tier: tier,
     });
     if (city) params.set("prefer_city", city);
+    if (homeIntent === "sale" || homeIntent === "rent") params.set("listing_type", homeIntent);
+    const selectedCategory = homeCategory || (homeIntent === "commercial" ? "commercial" : "");
+    if (selectedCategory) params.set("category", selectedCategory);
     return api.properties(`?${params}`, token);
-  }, [city, token]);
+  }, [city, token, homeIntent, homeCategory]);
 
   const premiumPage = usePagedProperties(
     (offset) => loadTier("premium", offset),
-    `${city}|${token || ""}|premium`,
+    `${city}|${token || ""}|${homeIntent}|${homeCategory}|premium`,
     true,
     (rows, mode) => (mode === "more" ? rows : shuffleList(rows)),
   );
   const simplePage = usePagedProperties(
     (offset) => loadTier("standard", offset),
-    `${city}|${token || ""}|standard`,
+    `${city}|${token || ""}|${homeIntent}|${homeCategory}|standard`,
     true,
     (rows, mode) => (mode === "more" ? rows : shuffleList(rows)),
   );
@@ -276,13 +302,23 @@ export function HomeScreen({
   const simpleItems = simplePage.items;
   const page = colors.page;
 
-  function propertyCard(item: PropertyCard, width: number) {
+  const activePremiumIndex = Math.min(premiumIndex, Math.max(0, premiumItems.length - 1));
+  const premiumDotStart = Math.max(0, Math.min(activePremiumIndex - 2, premiumItems.length - 5));
+
+  function propertyCard(item: PropertyCard, width: number, fullWidth = false) {
     return (
       <PropertyGridCard
         key={item.id}
         item={item}
         width={width}
-        borderRadius={12}
+        borderRadius={18}
+        home
+        fullWidth={fullWidth}
+        photoOverlay={fullWidth && premiumItems.length > 1 ? (
+          <View pointerEvents="none" accessibilityLabel={`${activePremiumIndex + 1} / ${premiumItems.length}`} style={{ position: "absolute", bottom: 6, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 5 }}>
+            {premiumItems.slice(premiumDotStart, premiumDotStart + 5).map((property, index) => <View key={property.id} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.white, opacity: premiumDotStart + index === activePremiumIndex ? 1 : 0.5 }} />)}
+          </View>
+        ) : undefined}
         saved={isSaved(item.id, item.is_favorite)}
         onPress={() => onOpen(item.slug || item.id)}
         onSave={() => toggleSaved(item)}
@@ -292,36 +328,25 @@ export function HomeScreen({
 
   return (
     <View style={{ flex: 1, backgroundColor: page }}>
-    <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 0, backgroundColor: page }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <Pressable onPress={onOpenMenu} hitSlop={8}>
-          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            <Image source={require("../../assets/splash.png")} style={{ width: 32, height: 32 }} resizeMode="contain" />
-          </View>
+    <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 14, backgroundColor: page }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Pressable onPress={onOpenMenu} accessibilityRole="button" accessibilityLabel="Property Setu menu" hitSlop={8} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 7 }}>
+          <Image source={require("../../assets/logo-mark.png")} resizeMode="contain" accessible={false} style={{ width: 38, height: 38 }} />
+          <View style={{ height: 24, width: 1, backgroundColor: colors.primaryDark }} />
+          <Text numberOfLines={1} adjustsFontSizeToFit style={{ flex: 1, fontSize: 17, fontWeight: "800", color: colors.ink }}>Property Setu</Text>
         </Pressable>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ fontSize: 22, fontWeight: "800", color: colors.ink }}>{city || (ready ? t.home.allProperties : t.home.findingCity)}</Text>
-          <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 13, color: colors.muted }}>{t.home.findProperty}</Text>
+        <View style={{ maxWidth: screenWidth < 380 ? 82 : 108, flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 20, backgroundColor: colors.secondary, paddingHorizontal: 8, paddingVertical: 7 }}>
+          <Ionicons name="location" size={14} color={colors.primary} />
+          <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 11, fontWeight: "700", color: colors.ink }}>{city || (ready ? t.home.allProperties : t.home.findingCity)}</Text>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Pressable onPress={openNotifications} hitSlop={8} style={{ padding: 4 }}>
-            <Ionicons name="notifications-outline" size={26} color={colors.ink} />
-            {unread > 0 ? (
-              <View style={{ position: "absolute", top: 0, right: 0, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.danger, borderWidth: 1.5, borderColor: page, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }}>
-                <Text style={{ color: "white", fontSize: 10, fontWeight: "900" }}>{unread > 99 ? "99+" : unread}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-          <Pressable onPress={openWallet} hitSlop={8} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="wallet-outline" size={22} color={colors.ink} />
-          </Pressable>
-        </View>
+        <Pressable onPress={openNotifications} accessibilityRole="button" accessibilityLabel={t.menu.notifications} hitSlop={4} style={{ width: 36, height: 44, alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="notifications-outline" size={24} color={colors.ink} />
+          {unread > 0 ? <View style={{ position: "absolute", top: 3, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}><Text style={{ color: colors.white, fontSize: 9, fontWeight: "800" }}>{unread > 99 ? "99+" : unread}</Text></View> : null}
+        </Pressable>
+        <Pressable onPress={openWallet} accessibilityRole="button" accessibilityLabel={t.account.wallet} hitSlop={4} style={{ width: 36, height: 44, alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="wallet-outline" size={24} color={colors.ink} />
+        </Pressable>
       </View>
-      <View style={{ marginTop: 14, backgroundColor: colors.card, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, height: 52, borderWidth: 1, borderColor: colors.line }}>
-        <Ionicons name="search" size={18} color={colors.primary} />
-        <VoiceTextInput value={query} onChangeText={setQuery} onSubmitEditing={() => { const next = query; setQuery(""); onSearch(next || "all"); }} placeholder={t.home.searchPlaceholder} placeholderTextColor={colors.faint} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 14 }} />
-      </View>
-      <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
     </View>
     <ScrollView
       style={{ flex: 1 }}
@@ -333,35 +358,72 @@ export function HomeScreen({
       onScroll={(event) => { if (nearScrollEnd(event)) simplePage.loadMore(); }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { premiumPage.refresh(); simplePage.refresh(); }} tintColor={colors.primary} colors={[colors.primary]} />}
     >
-      <View style={{ marginHorizontal: 20, marginTop: 8, backgroundColor: colors.card, borderRadius: 20, paddingTop: 16, paddingBottom: 4, borderWidth: 1, borderColor: colors.line, ...cardShadow }}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {homeCategories().map((item) => (
-            <Pressable key={item.label} onPress={() => onSearch(item.query)} style={{ width: "25%", alignItems: "center", marginBottom: 14 }}>
-              <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: item.bg, alignItems: "center", justifyContent: "center" }}>
-                <MaterialCommunityIcons name={item.icon} size={26} color={item.color} />
-              </View>
-              <Text style={{ marginTop: 6, fontSize: 12, color: colors.ink, fontWeight: "600" }}>{chipText(item.query)}</Text>
-            </Pressable>
-          ))}
+      <View style={{ marginHorizontal: 20, flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <View style={{ flex: 1, backgroundColor: colors.card, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, minHeight: 52, borderWidth: 1, borderColor: colors.line }}>
+          <Ionicons name="search-outline" size={22} color={colors.primaryDark} />
+          <VoiceTextInput value={query} onChangeText={setQuery} onSubmitEditing={() => { const next = query; setQuery(""); onSearch(next || "all"); }} placeholder={t.home.localityPlaceholder} placeholderTextColor={colors.muted} style={{ flex: 1, marginLeft: 8, color: colors.ink, fontSize: 13, paddingVertical: 10 }} />
         </View>
+        <Pressable onPress={() => {
+          setHomeFilters((current) => ({ ...current, listing: homeIntent === "sale" || homeIntent === "rent" ? homeIntent : "", category: homeCategory || (homeIntent === "commercial" ? "commercial" : ""), propertyType: homeCategory }));
+          setHomeFiltersOpen(true);
+        }} accessibilityRole="button" accessibilityLabel={t.search.filters} accessibilityState={{ expanded: homeFiltersOpen }} style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: colors.primaryDark, alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="options-outline" size={26} color={colors.white} />
+        </Pressable>
       </View>
+      <View style={{ marginHorizontal: 20, flexDirection: "row", backgroundColor: colors.secondary, borderRadius: 13, borderWidth: 1, borderColor: colors.line, overflow: "hidden" }}>
+        {[
+          { label: t.home.buy, value: "sale" },
+          { label: t.home.rent, value: "rent" },
+          { label: t.home.commercial, value: "commercial" },
+        ].map((item) => {
+          const active = homeIntent === item.value;
+          return (
+            <Pressable key={item.value} onPress={() => selectHomeIntent(item.value)} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ selected: active }} style={{ flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", backgroundColor: active ? colors.primaryDark : undefined, borderRadius: 12, paddingHorizontal: 4 }}>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 14, fontWeight: active ? "700" : "500", color: active ? colors.white : colors.ink }}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={{ marginHorizontal: 20, marginTop: 10, paddingVertical: 6, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+        {[
+          { label: t.kinds.all, value: "", icon: null },
+          ...homeCategorySlugs(homeIntent === "commercial").map(value => ({ label: chipText(`category=${value}`), value, icon: homeCategoryIcons[value] })),
+        ].map((item) => {
+          const active = homeCategory === item.value;
+          return (
+            <Pressable key={item.value || "all"} onPress={() => selectHomeCategory(item.value)} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ selected: active }} hitSlop={{ top: 6, bottom: 6, left: 3, right: 3 }} style={{ width: subcategoryTabWidth, flexShrink: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, minHeight: 32, borderRadius: 8, borderWidth: 1, borderColor: active ? colors.primaryDark : colors.line, backgroundColor: active ? colors.primaryDark : undefined, paddingHorizontal: 6 }}>
+              {item.icon ? <MaterialCommunityIcons name={item.icon} size={16} color={active ? colors.white : colors.primaryDark} /> : null}
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ flexShrink: 1, color: active ? colors.white : colors.ink, fontWeight: active ? "700" : "500", fontSize: 12 }}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={{ marginHorizontal: 20 }}><LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} /></View>
       <HomeBanner onPress={() => onSearch("all")} />
       {error ? <Text style={[styles.error, { margin: 16 }]}>{error}</Text> : null}
-      {loading ? <View style={{ width: "100%", paddingHorizontal: 20, marginTop: 24 }}><PropertyGridSkeleton width={cardWidth} borderRadius={12} /></View> : null}
+      {loading ? <View style={{ width: "100%", paddingHorizontal: 20, marginTop: 24 }}><PropertyGridSkeleton width={cardWidth} borderRadius={18} /></View> : null}
       {!loading && premiumItems.length > 0 ? (
         <>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 20, marginTop: 28, marginBottom: 12 }}>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.home.premium}</Text>
+            <Text style={{ flex: 1, fontSize: screenWidth < 380 ? 19 : 21, fontWeight: "800", color: colors.ink }}>{t.home.premium}</Text>
+            <Pressable onPress={() => onApplyFilters({
+              q: "",
+              filters: { ...emptySearchFilters, listing: homeIntent === "sale" || homeIntent === "rent" ? homeIntent : "", category: homeCategory || (homeIntent === "commercial" ? "commercial" : "") },
+              tier: "premium",
+            })} accessibilityRole="button" accessibilityLabel={t.home.premium} hitSlop={8} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 6 }}>
+              <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>{t.home.seeAll}</Text>
+              <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+            </Pressable>
           </View>
-          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }} scrollEventThrottle={16} onScroll={(event) => { if (nearScrollEnd(event, "x")) premiumPage.loadMore(); }}>
-            {premiumItems.map((item) => propertyCard(item, cardWidth))}
+          <ScrollView ref={premiumScrollRef} horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} snapToInterval={premiumCardWidth + 12} snapToAlignment="start" decelerationRate="fast" style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }} scrollEventThrottle={16} onScroll={(event) => { const index = Math.max(0, Math.round(event.nativeEvent.contentOffset.x / (premiumCardWidth + 12))); setPremiumIndex(index); if (nearScrollEnd(event, "x")) premiumPage.loadMore(); }}>
+            {premiumItems.map((item) => propertyCard(item, premiumCardWidth, true))}
             {premiumPage.loadingMore ? <ActivityIndicator color={colors.primary} style={{ alignSelf: "center", width: 36 }} /> : null}
           </ScrollView>
         </>
       ) : null}
       {!loading ? (
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 20, marginTop: 28, marginBottom: 12 }}>
-        <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.home.simple}</Text>
+        <Text style={{ fontSize: 21, fontWeight: "800", color: colors.ink }}>{t.home.simple}</Text>
         <Pressable onPress={() => onSearch("all")}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.home.seeAll}</Text></Pressable>
       </View>
       ) : null}
@@ -373,7 +435,125 @@ export function HomeScreen({
       ) : null}
       {simplePage.loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} /> : null}
     </ScrollView>
+    <SearchFiltersSheet
+      visible={homeFiltersOpen}
+      value={homeFilters}
+      onChange={setHomeFilters}
+      onClose={() => setHomeFiltersOpen(false)}
+      onApply={() => {
+        setHomeFiltersOpen(false);
+        onApplyFilters({ q: query.trim(), filters: { ...homeFilters } });
+      }}
+    />
     </View>
+  );
+}
+
+export type SearchFilters = {
+  listing: string;
+  category: string;
+  propertyType: string;
+  price: string;
+  bedrooms: string;
+  withPhotos: boolean;
+  withParking: boolean;
+  sort: string;
+};
+
+export type SearchFilterRequest = { q: string; filters: SearchFilters; tier?: "premium" | "standard" };
+
+const emptySearchFilters: SearchFilters = {
+  listing: "", category: "", propertyType: "", price: "", bedrooms: "", withPhotos: false, withParking: false, sort: "newest",
+};
+
+function SearchFiltersSheet({ visible, value, onChange, onClose, onApply, onClear }: {
+  visible: boolean;
+  value: SearchFilters;
+  onChange: (value: SearchFilters) => void;
+  onClose: () => void;
+  onApply: () => void;
+  onClear?: () => void;
+}) {
+  const { t } = useI18n();
+  const { listing, category, propertyType, price, bedrooms, withPhotos, withParking, sort } = value;
+  const setPropertyType = (next: string) => onChange({ ...value, propertyType: next });
+  const setPrice = (next: string) => onChange({ ...value, price: next });
+  const setBedrooms = (next: string) => onChange({ ...value, bedrooms: next });
+  const setWithPhotos = (next: boolean | ((current: boolean) => boolean)) => onChange({ ...value, withPhotos: typeof next === "function" ? next(withPhotos) : next });
+  const setWithParking = (next: boolean) => onChange({ ...value, withParking: next });
+  const setSort = (next: string) => onChange({ ...value, sort: next });
+  const clearFilters = () => { onChange({ ...emptySearchFilters }); onClear?.(); };
+  function selectTab(query: string) {
+    const next = { ...value, listing: "", category: "", propertyType: "" };
+    if (query.startsWith("listing_type=")) next.listing = query.slice("listing_type=".length);
+    else if (query.startsWith("category=")) next.category = query.slice("category=".length);
+    onChange(next);
+  }
+  const tabActive = (query: string) => !query ? !listing && !category : query === `listing_type=${listing}` || (query.startsWith("category=") && query.slice("category=".length) === category && !listing);
+  return (
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" }}>
+          <Pressable style={{ flex: 1 }} onPress={onClose} />
+          <View style={{ maxHeight: "82%", backgroundColor: colors.page, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 18 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 10 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.search.filters}</Text>
+              <Pressable onPress={clearFilters} hitSlop={8}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.common.clear}</Text></Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12, gap: 24 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.lookingFor}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {typeChips.map((chip) => (
+                    <LeVechChip key={chip.query || "all"} label={chipText(chip.query)} active={tabActive(chip.query)} onPress={() => selectTab(chip.query)} />
+                  ))}
+                </View>
+              </View>
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.type}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {[{ id: "", label: t.search.anyType }, ...propertyTypes.map((option) => ({ ...option, label: chipText(`category=${option.id}`) }))].map((option) => (
+                    <LeVechChip key={option.id || "type"} label={option.label} active={propertyType === option.id} onPress={() => setPropertyType(option.id)} />
+                  ))}
+                </View>
+              </View>
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.price}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {[{ id: "", label: t.search.anyPrice }, ...priceRanges.map((option) => ({ ...option, label: option.id === "under25" ? t.search.under25 : option.id === "25to50" ? t.search.range25 : option.id === "50to1cr" ? t.search.range50 : t.search.above1 }))].map((option) => (
+                    <LeVechChip key={option.id || "price"} label={option.label} active={price === option.id} onPress={() => setPrice(option.id)} />
+                  ))}
+                </View>
+              </View>
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.bhk}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {[{ id: "", label: t.search.any }, { id: "1", label: t.search.bhk1 }, { id: "2", label: t.search.bhk2 }, { id: "3", label: t.search.bhk3 }, { id: "4", label: t.search.bhk4 }].map((option) => (
+                    <LeVechChip key={option.id || "beds"} label={option.label} active={bedrooms === option.id} onPress={() => setBedrooms(option.id)} />
+                  ))}
+                </View>
+              </View>
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.more}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <LeVechChip label={t.search.photos} active={withPhotos} onPress={() => setWithPhotos((value) => !value)} />
+                  <LeVechChip label={t.details.parking} active={withParking} onPress={() => setWithParking(!withParking)} />
+                </View>
+              </View>
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.sort}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {[{ id: "newest", label: t.search.newest }, { id: "low", label: t.search.priceLow }, { id: "high", label: t.search.priceHigh }].map((option) => (
+                    <LeVechChip key={option.id} label={option.label} active={sort === option.id} onPress={() => setSort(option.id)} />
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+            <Pressable onPress={onApply} style={({ pressed }) => ({ marginHorizontal: 20, marginTop: 4, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
+              <Text style={{ color: colors.white, fontWeight: "700" }}>{t.search.show}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
   );
 }
 
@@ -405,7 +585,7 @@ async function writeLocalSearches(items: SavedSearch[]) {
   await AsyncStorage.setItem(RECENT_SEARCH_KEY, JSON.stringify(items.slice(0, 8)));
 }
 
-export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; onOpen: (id: string) => void }) {
+export function SearchScreen({ initialQuery, filterRequest, onOpen }: { initialQuery?: string; filterRequest?: SearchFilterRequest; onOpen: (id: string) => void }) {
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
   const { me, token } = useAuth();
@@ -413,6 +593,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   const requireLogin = useRequireLogin();
   const profileCity = cityName(me?.profile?.city);
   const { city: nearCity, denied, canAskAgain, retry } = useBrowseCity(profileCity);
+  const [listingTier, setListingTier] = useState<"" | "premium" | "standard">(filterRequest?.tier || "");
   const [q, setQ] = useState("");
   const [listing, setListing] = useState("");
   const [category, setCategory] = useState("");
@@ -420,6 +601,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   const [price, setPrice] = useState("");
   const [bedrooms, setBedrooms] = useState("");
   const [withPhotos, setWithPhotos] = useState(false);
+  const [withParking, setWithParking] = useState(false);
   const [sort, setSort] = useState("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [savedCity, setSavedCity] = useState("");
@@ -434,7 +616,9 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
       offset: String(offset),
     });
     if (q.trim()) params.set("q", q.trim());
+    if (listingTier) params.set("listing_tier", listingTier);
     if (listing) params.set("listing_type", listing);
+    if (withParking) params.set("parking", "true");
     const activeCategory = propertyType || category;
     if (activeCategory) params.set("category", activeCategory);
     const range = priceRanges.find((item) => item.id === price);
@@ -447,11 +631,11 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
       params.set("city_first", "true");
     }
     return api.properties(`?${params.toString()}`, token);
-  }, [bedrooms, category, listing, nearCity, price, propertyType, q, savedCity, token]);
+  }, [bedrooms, category, listing, nearCity, price, propertyType, q, savedCity, token, withParking, listingTier]);
 
   const searchPage = usePagedProperties(
     loadSearchPage,
-    `${q}|${listing}|${category}|${propertyType}|${price}|${bedrooms}|${savedCity || nearCity}|${token || ""}`,
+    `${listingTier}|${q}|${listing}|${category}|${propertyType}|${price}|${bedrooms}|${withParking}|${savedCity || nearCity}|${token || ""}`,
   );
   const { items, loading, refreshing, error } = searchPage;
 
@@ -511,6 +695,23 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     }
   }, [initialQuery]);
 
+  useEffect(() => {
+    setListingTier(filterRequest?.tier || "");
+    if (!filterRequest) return;
+    setQ(filterRequest.q);
+    setSavedCity("");
+    setListing(filterRequest.filters.listing);
+    setCategory(filterRequest.filters.category);
+    setPropertyType(filterRequest.filters.propertyType);
+    setPrice(filterRequest.filters.price);
+    setBedrooms(filterRequest.filters.bedrooms);
+    setWithPhotos(filterRequest.filters.withPhotos);
+    setWithParking(filterRequest.filters.withParking);
+    setSort(filterRequest.filters.sort);
+    setFiltersOpen(false);
+    setSearchOpen(false);
+  }, [filterRequest]);
+
   const shown = sortForSearch(
     [...items]
       .filter((item) => !withPhotos || Boolean(item.cover_image)),
@@ -549,7 +750,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     if (!query) return !listing && !category;
     return query === `listing_type=${listing}` || (query.startsWith("category=") && query.slice("category=".length) === category && !listing);
   };
-  const filterCount = [listing || category, propertyType, price, bedrooms, withPhotos, sort !== "newest"].filter(Boolean).length;
+  const filterCount = [listing || category, propertyType, price, bedrooms, withPhotos, withParking, listingTier, sort !== "newest"].filter(Boolean).length;
 
   function priceChoice(min?: number | string | null, max?: number | string | null) {
     const low = min == null || min === "" ? null : Number(min);
@@ -558,6 +759,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
   }
 
   function applySaved(item: SavedSearch) {
+    setListingTier("");
     setQ(item.q || "");
     setListing(item.listing_type || "");
     setCategory(item.category_slug || "");
@@ -643,15 +845,6 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
     blurTimer.current = setTimeout(() => setSearchOpen(false), 220);
   }
 
-  function clearFilters() {
-    setListing("");
-    setCategory("");
-    setPropertyType("");
-    setPrice("");
-    setBedrooms("");
-    setWithPhotos(false);
-    setSort("newest");
-  }
 
   return (
     <KeyboardScreen style={{ backgroundColor: colors.page }}>
@@ -688,6 +881,10 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
             ))}
           </View>
         ) : null}
+        {listingTier ? <Pressable onPress={() => setListingTier("")} accessibilityRole="button" accessibilityLabel={`${t.common.clear}: ${listingTier === "premium" ? t.home.premium : t.home.simple}`} style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: colors.primarySoft, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, marginTop: 10 }}>
+          <Text style={{ color: colors.primaryDark, fontSize: 12, fontWeight: "700" }}>{listingTier === "premium" ? t.home.premium : t.home.simple}</Text>
+          <Ionicons name="close" size={16} color={colors.primaryDark} />
+        </Pressable> : null}
         <LocationPrompt denied={denied} canAskAgain={canAskAgain} onAllow={retry} />
       </View>
       {error ? <Text style={[styles.error, { marginHorizontal: 20, marginTop: 12 }]}>{error}</Text> : null}
@@ -712,68 +909,23 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
         )}
         ListEmptyComponent={loading ? <PropertyListSkeleton /> : error ? undefined : <EmptyState kind="search" />}
       />
-      <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
-        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" }}>
-          <Pressable style={{ flex: 1 }} onPress={() => setFiltersOpen(false)} />
-          <View style={{ maxHeight: "82%", backgroundColor: colors.page, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 18 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 10 }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink }}>{t.search.filters}</Text>
-              <Pressable onPress={clearFilters} hitSlop={8}><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.common.clear}</Text></Pressable>
-            </View>
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12, gap: 24 }} showsVerticalScrollIndicator={false}>
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.lookingFor}</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {typeChips.map((chip) => (
-                    <LeVechChip key={chip.query || "all"} label={chipText(chip.query)} active={tabActive(chip.query)} onPress={() => selectTab(chip.query)} />
-                  ))}
-                </View>
-              </View>
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.type}</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {[{ id: "", label: t.search.anyType }, ...propertyTypes.map((option) => ({ ...option, label: chipText(`category=${option.id}`) }))].map((option) => (
-                    <LeVechChip key={option.id || "type"} label={option.label} active={propertyType === option.id} onPress={() => setPropertyType(option.id)} />
-                  ))}
-                </View>
-              </View>
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.price}</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {[{ id: "", label: t.search.anyPrice }, ...priceRanges.map((option) => ({ ...option, label: option.id === "under25" ? t.search.under25 : option.id === "25to50" ? t.search.range25 : option.id === "50to1cr" ? t.search.range50 : t.search.above1 }))].map((option) => (
-                    <LeVechChip key={option.id || "price"} label={option.label} active={price === option.id} onPress={() => setPrice(option.id)} />
-                  ))}
-                </View>
-              </View>
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.bhk}</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {[{ id: "", label: t.search.any }, { id: "1", label: t.search.bhk1 }, { id: "2", label: t.search.bhk2 }, { id: "3", label: t.search.bhk3 }, { id: "4", label: t.search.bhk4 }].map((option) => (
-                    <LeVechChip key={option.id || "beds"} label={option.label} active={bedrooms === option.id} onPress={() => setBedrooms(option.id)} />
-                  ))}
-                </View>
-              </View>
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.more}</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  <LeVechChip label={t.search.photos} active={withPhotos} onPress={() => setWithPhotos((value) => !value)} />
-                </View>
-              </View>
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontWeight: "700", color: colors.ink }}>{t.search.sort}</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {[{ id: "newest", label: t.search.newest }, { id: "low", label: t.search.priceLow }, { id: "high", label: t.search.priceHigh }].map((option) => (
-                    <LeVechChip key={option.id} label={option.label} active={sort === option.id} onPress={() => setSort(option.id)} />
-                  ))}
-                </View>
-              </View>
-            </ScrollView>
-            <Pressable onPress={() => setFiltersOpen(false)} style={({ pressed }) => ({ marginHorizontal: 20, marginTop: 4, backgroundColor: pressed ? colors.primaryDark : colors.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", ...buttonShadow })}>
-              <Text style={{ color: colors.white, fontWeight: "700" }}>{t.search.show}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <SearchFiltersSheet
+        visible={filtersOpen}
+        value={{ listing, category, propertyType, price, bedrooms, withPhotos, withParking, sort }}
+        onChange={(next) => {
+          setListing(next.listing);
+          setCategory(next.category);
+          setPropertyType(next.propertyType);
+          setPrice(next.price);
+          setBedrooms(next.bedrooms);
+          setWithPhotos(next.withPhotos);
+          setWithParking(next.withParking);
+          setSort(next.sort);
+        }}
+        onClear={() => setListingTier("")}
+        onClose={() => setFiltersOpen(false)}
+        onApply={() => setFiltersOpen(false)}
+      />
     </KeyboardScreen>
   );
 }
@@ -783,6 +935,9 @@ const propertyTypes = [
   { id: "apartment", label: "Apartment" },
   { id: "villa", label: "Villa" },
   { id: "shop", label: "Shop" },
+  { id: "office", label: "Office" },
+  { id: "warehouse", label: "Warehouse" },
+  { id: "commercial-plot", label: "Commercial Plot" },
 ];
 
 const priceRanges = [

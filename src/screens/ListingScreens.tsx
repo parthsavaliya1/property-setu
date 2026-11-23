@@ -21,6 +21,7 @@ import { api, extractListingPhoto, inr, listingPrice, upgradeCharge, uploadMedia
 import { getRemoteSettings, subscribeRemoteSettings } from "../lib/remoteConfig";
 import { readCurrentPlace } from "../lib/location";
 import { buttonShadow, colors } from "../theme";
+import { propertyCategoryGroups } from "../lib/propertyCategories";
 import type { PropertyDetail } from "../types/database";
 
 const kinds = [
@@ -32,6 +33,7 @@ const kinds = [
   { slug: "shop", label: "Shop", image: require("../../assets/login-bg.jpg") },
   { slug: "office", label: "Office", image: require("../../assets/hero-house.jpg") },
   { slug: "warehouse", label: "Warehouse", image: require("../../assets/splash-house.jpg") },
+  { slug: "commercial-plot", label: "Commercial Plot", image: require("../../assets/login-bg.jpg") },
   { slug: "other-property", label: "Other", image: require("../../assets/login-bg.jpg") },
 ];
 
@@ -568,20 +570,25 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Text style={{ color: "#8a918c", textAlign: "center", marginTop: 8, lineHeight: 18 }}>{t.listing.fillFromPhotoHint}</Text>
             {filledNotice ? <Text style={{ color: green, fontWeight: "700", textAlign: "center", marginTop: 8 }}>{filledNotice}</Text> : null}
             <Text style={{ fontSize: 22, fontWeight: "800", textAlign: "center", marginVertical: 18, color: colors.ink }}>{t.listing.what}</Text>
-            <View style={{ gap: 12 }}>
-              {[0, 1, 2].map((row) => (
-                <View key={row} style={{ flexDirection: "row", gap: 10 }}>
-                  {kinds.slice(row * 3, row * 3 + 3).map((item) => {
-                    const selected = categorySlug === item.slug;
-                    return (
-                      <Pressable key={item.slug} onPress={() => setCategorySlug(item.slug)} style={{ flex: 1, alignItems: "center" }}>
-                        <View style={{ width: "100%", aspectRatio: 1.15, borderRadius: 14, overflow: "hidden", borderWidth: selected ? 2 : 0, borderColor: green }}>
-                          <Image source={item.image} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                        </View>
-                        <Text numberOfLines={2} style={{ textAlign: "center", marginTop: 6, minHeight: 36, fontWeight: "600", color: colors.ink, fontSize: 13 }}>{kindName(item.slug)}</Text>
-                      </Pressable>
-                    );
-                  })}
+            <View style={{ gap: 20 }}>
+              {propertyCategoryGroups.map((group) => (
+                <View key={group.key} style={{ gap: 10 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: colors.ink }}>{group.key === "commercial" ? t.home.commercial : group.key === "residential" ? t.listing.residential : group.key === "land" ? t.kinds.land : t.kinds.other}</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                    {group.slugs.map((slug) => {
+                      const item = kinds.find((kind) => kind.slug === slug)!;
+                      const selected = categorySlug === item.slug;
+                      return (
+                        <Pressable key={item.slug} onPress={() => setCategorySlug(item.slug)} accessibilityRole="button" accessibilityLabel={kindName(item.slug)} accessibilityState={{ selected }} style={{ width: "30%", alignItems: "center" }}>
+                          <View style={{ width: "100%", aspectRatio: 1.15, borderRadius: 14, overflow: "hidden", borderWidth: selected ? 2 : 0, borderColor: colors.primary }}>
+                            <Image source={item.image} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                            {selected ? <View style={{ position: "absolute", top: 5, right: 5, borderRadius: 12, backgroundColor: colors.primary }}><Ionicons name="checkmark-circle" size={22} color={colors.white} /></View> : null}
+                          </View>
+                          <Text numberOfLines={2} style={{ textAlign: "center", marginTop: 6, minHeight: 36, fontWeight: selected ? "800" : "600", color: colors.ink, fontSize: 13 }}>{kindName(item.slug)}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 </View>
               ))}
             </View>

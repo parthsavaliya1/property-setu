@@ -18,7 +18,7 @@ import { PrivacyScreen } from "./screens/PrivacyScreen";
 import { TermsScreen } from "./screens/TermsScreen";
 import { ChatScreen, ChatsScreen } from "./screens/ChatScreens";
 import { LoginScreen, OnboardingScreen, SplashScreen } from "./screens/AuthScreens";
-import { DetailsScreen, HomeScreen, MapScreen, SearchScreen } from "./screens/BrowseScreens";
+import { DetailsScreen, HomeScreen, MapScreen, SearchScreen, type SearchFilterRequest } from "./screens/BrowseScreens";
 import { AddScreen, ScheduleScreen } from "./screens/ListingScreens";
 
 export type MainTabParamList = {
@@ -170,7 +170,9 @@ function MenuRoute() {
 function Tabs() {
   const { session, me } = useAuth();
   const { t } = useI18n();
+  const requireLogin = useRequireLogin();
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFilterRequest, setSearchFilterRequest] = useState<SearchFilterRequest>();
 
   function profilePage(showBack: boolean) {
     return (
@@ -219,16 +221,29 @@ function Tabs() {
           <HomeScreen
             onOpen={openDetails}
             onSearch={(query) => {
+              setSearchFilterRequest(undefined);
               setSearchQuery(query);
+              navigation.navigate("Search");
+            }}
+            onApplyFilters={(request) => {
+              setSearchQuery("");
+              setSearchFilterRequest(request);
               navigation.navigate("Search");
             }}
             onNotify={() => navigationRef.navigate("Notifications")}
             onWallet={() => navigationRef.navigate("Wallet")}
             onOpenMenu={() => navigationRef.navigate("Menu")}
+            onOffers={() => {
+              if (!session) {
+                requireLogin(t.gate.addProperty);
+                return;
+              }
+              navigationRef.navigate("Add");
+            }}
           />
         )}
       </Tab.Screen>
-      <Tab.Screen name="Search">{() => <SearchScreen initialQuery={searchQuery} onOpen={openDetails} />}</Tab.Screen>
+      <Tab.Screen name="Search">{() => <SearchScreen initialQuery={searchQuery} filterRequest={searchFilterRequest} onOpen={openDetails} />}</Tab.Screen>
       <Tab.Screen
         name="Map"
         options={{
