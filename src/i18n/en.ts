@@ -247,6 +247,10 @@ export const en = {
     unavailable: "This property is no longer available.",
   },
   listing: {
+    propertyVideo: "Property video",
+    propertyVideos: "Property videos",
+    tapToWatch: "Tap to watch",
+    watchVideo: "Watch property video",
     photoLimit: "Up to {count} photos per property",
     videoLimit: "Up to {count} videos, {seconds} seconds each",
     videoTooLong: "Each video must be {seconds} seconds or shorter.",

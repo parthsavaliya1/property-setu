@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardFormScroll, KeyboardScreen, requestScrollFocusedInput, useKeyboardOverlap } from "../components/keyboard";
+import { PropertyVideoCard } from "../components/PropertyVideoCard";
 import { VoiceTextInput } from "../components/VoiceField";
 import type { SpokenKind } from "../lib/numbers";
 import { PageHeader, SkeletonBlock, styles } from "../components/ui";
@@ -692,10 +693,12 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
             <Text style={{ color: colors.muted, marginTop: 10 }}>{images.length}/{mediaLimits.maxPhotos} · {fill(t.listing.photoLimit, { count: mediaLimits.maxPhotos })}</Text>
             <Text style={{ fontWeight: "800", marginTop: 18, marginBottom: 8 }}>{t.listing.uploadVideo}</Text>
             <Text style={{ color: colors.muted, marginBottom: 8 }}>{fill(t.listing.videoLimit, { count: mediaLimits.maxVideos, seconds: mediaLimits.maxVideoDurationSeconds })}</Text>
-            {videos.map((url, index) => <View key={`${url}-${index}`} style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 }}>
-              <Pressable onPress={() => { Linking.openURL(url).catch(() => setError(t.listing.uploadFailed)); }} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}><Ionicons name="play-circle-outline" size={26} color={colors.primary} /><Text style={{ color: colors.ink }}>{t.listing.videoAdded} {index + 1}</Text></Pressable>
-              <Pressable disabled={busy} onPress={() => setVideos(current => current.filter((_, i) => i !== index))} accessibilityRole="button" accessibilityLabel={`${t.common.delete} ${index + 1}`} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Ionicons name="trash-outline" size={20} color={colors.danger} /></Pressable>
-            </View>)}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: videos.length ? 12 : 0 }}>
+              {videos.map((url, index) => <PropertyVideoCard key={`${url}-${index}`} index={index} poster={images[0]} disabled={busy}
+                onPress={() => { Linking.openURL(url).catch(() => setError(t.listing.uploadFailed)); }}
+                onRemove={() => setVideos(current => current.filter((_, i) => i !== index))}
+              />)}
+            </View>
             {videos.length < mediaLimits.maxVideos && <Pressable disabled={busy} onPress={pickVideo} style={{ borderWidth: 1, borderStyle: "dashed", borderColor: colors.line, borderRadius: 14, height: 72, alignItems: "center", justifyContent: "center", backgroundColor: colors.card }}>
               <Ionicons name="add-circle-outline" size={26} color={colors.primary} />
               <Text style={{ color: colors.primary, marginTop: 4, fontWeight: "700" }}>{t.listing.addVideo}</Text>

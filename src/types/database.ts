@@ -154,7 +154,7 @@ export type PropertyDetail = PropertyCard & {
   pincode?: string | null;
   latitude?: string | null;
   longitude?: string | null;
-  images?: Array<{ id: string; image_url: string; image_type: string; is_cover: boolean }>;
+  images?: Array<{ id: string; image_url: string; thumbnail_url?: string | null; image_type: string; is_cover: boolean }>;
   amenities?: Array<{ id: string; name: string; slug: string; icon: string | null }>;
   features?: Array<{ id: string; feature_key: string; feature_value: string | null }>;
   prices?: Array<{

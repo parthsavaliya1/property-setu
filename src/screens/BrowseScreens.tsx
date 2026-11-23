@@ -10,6 +10,7 @@ import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Linking, Moda
 import { KeyboardScreen } from "../components/keyboard";
 import { VoiceTextInput } from "../components/VoiceField";
 import { PropertyGridCard, PropertyListCard, PropertyListSkeleton } from "../components/PropertyGridCard";
+import { PropertyVideoCard } from "../components/PropertyVideoCard";
 import { PropertyMap } from "../components/PropertyMap";
 import { DetailSkeleton, EmptyState, PageHeader, PropertyGridSkeleton, SkeletonBlock, styles } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
@@ -1322,6 +1323,14 @@ export function DetailsScreen({ id, onSchedule, onChat, onEdit, onInquiries, onM
           ) : null}
         </View>
         <View style={{ backgroundColor: colors.page, paddingHorizontal: 20, paddingTop: 20, flexGrow: 1 }}>
+          {item.images?.some(image => image.image_type === "video") ? <View style={{ marginBottom: 18 }}>
+            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "700", marginBottom: 10 }}>{t.listing.propertyVideos}</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+              {item.images.filter(image => image.image_type === "video").map((video, index) => <PropertyVideoCard key={video.id || `${video.image_url}-${index}`} index={index} poster={video.thumbnail_url || photos[0]}
+                onPress={() => { Linking.openURL(video.image_url).catch(() => setNote(t.search.unavailable)); }}
+              />)}
+            </View>
+          </View> : null}
           {item.listing_label === "Premium" || item.is_premium ? (
             <View style={{ alignSelf: "flex-start", backgroundColor: "#f8e7c0", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 8 }}>
               <Text style={{ color: "#8a5a12", fontSize: 11, fontWeight: "800" }}>{t.common.premium}</Text>
@@ -1371,11 +1380,7 @@ export function DetailsScreen({ id, onSchedule, onChat, onEdit, onInquiries, onM
               <View>
                 <Text style={{ color: colors.muted, fontSize: 15, lineHeight: 23 }} numberOfLines={expanded ? undefined : 4}>{description}</Text>
                 {description.length > 90 ? <Pressable onPress={() => setExpanded((value) => !value)}><Text style={{ color: colors.primary, fontWeight: "700", marginTop: 10 }}>{expanded ? t.details.showLess : t.details.readMore}</Text></Pressable> : null}
-                {item.images?.filter(image => image.image_type === "video").map((video, index) => (
-                  <Pressable key={video.id || `${video.image_url}-${index}`} onPress={() => { Linking.openURL(video.image_url).catch(() => setNote(t.search.unavailable)); }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, paddingVertical: 10 }}>
-                    <Ionicons name="play-circle-outline" size={26} color={colors.primary} /><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.listing.videoAdded} {index + 1}</Text>
-                  </Pressable>
-                ))}
+
               </View>
             ) : null}
             {tab === "amenities" ? (

@@ -249,6 +249,10 @@ export const gu: Copy = {
     unavailable: "આ પ્રોપર્ટી હવે ઉપલબ્ધ નથી.",
   },
   listing: {
+    propertyVideo: "પ્રોપર્ટી વિડિયો",
+    propertyVideos: "પ્રોપર્ટી વિડિયો",
+    tapToWatch: "જોવા માટે ટૅપ કરો",
+    watchVideo: "પ્રોપર્ટી વિડિયો જુઓ",
     photoLimit: "દરેક પ્રોપર્ટી માટે વધુમાં વધુ {count} ફોટા",
     videoLimit: "વધુમાં વધુ {count} વિડિયો, દરેક {seconds} સેકન્ડ",
     videoTooLong: "દરેક વિડિયો {seconds} સેકન્ડ કે તેનાથી નાનો હોવો જોઈએ.",

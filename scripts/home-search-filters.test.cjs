@@ -20,6 +20,7 @@ function harness(screenPath = 'src/screens/BrowseScreens.tsx', options = {}) {
   native.useWindowDimensions = () => ({ width: 390, height: 844 });
   native.Dimensions = { get: () => ({ width: 390, height: 844 }) };
   native.Platform = { OS: 'android' };
+  native.Linking = { openURL: async url => { options.openedVideos?.push(url); } };
   const fallback = new Proxy({}, { get: (_, key) => key });
   const module = { exports: {} };
   const source = fs.readFileSync(path.join(__dirname, '..', screenPath), 'utf8');
@@ -275,7 +276,7 @@ test('editing preserves existing videos, permits a second video, and rejects an 
   const options = {
     token: 'owner-token',
     mediaLimits: { maxPhotos: 5, maxVideos: 2, maxVideoDurationSeconds: 60 },
-    pickerOptions: [], uploads: [],
+    pickerOptions: [], uploads: [], openedVideos: [],
     pickerResponse: { canceled: false, assets: [{ uri: 'new-video.mp4', duration: 61000 }] },
     property: { title: 'Existing house', category_slug: 'house', images: [
       { image_type: 'gallery', image_url: 'https://media.example/photo1.jpg' },
@@ -291,7 +292,7 @@ test('editing preserves existing videos, permits a second video, and rejects an 
   await form.effectContaining('.mediaSettings()');
   let tree = render();
   for (let step = 0; step < 4; step++) { buttonWith(tree, 'common.next').props.onPress(); tree = render(); }
-  const existing = () => find(tree, node => node.type === 'Text' && React.Children.toArray(node.props.children).join('') === 'listing.videoAdded 1');
+  const existing = () => find(tree, node => node.type === 'PropertyVideoCard' && node.props.index === 0);
   assert.ok(existing());
   await buttonWith(tree, 'listing.addVideo').props.onPress();
   tree = render();
@@ -304,6 +305,12 @@ test('editing preserves existing videos, permits a second video, and rejects an 
   assert.equal(options.pickerOptions.at(-1).selectionLimit, 1);
   assert.equal(options.pickerOptions.at(-1).videoMaxDuration, 60);
   assert.ok(existing());
-  assert.ok(find(tree, node => node.type === 'Text' && React.Children.toArray(node.props.children).join('') === 'listing.videoAdded 2'));
+  assert.ok(find(tree, node => node.type === 'PropertyVideoCard' && node.props.index === 1));
   assert.equal(buttonWith(tree, 'listing.addVideo'), undefined);
+  await existing().props.onPress();
+  assert.deepEqual(options.openedVideos, ['https://media.example/existing.mp4']);
+  find(tree, node => node.type === 'PropertyVideoCard' && node.props.index === 1).props.onRemove();
+  tree = render();
+  assert.ok(existing());
+  assert.equal(find(tree, node => node.type === 'PropertyVideoCard' && node.props.index === 1), undefined);
 });

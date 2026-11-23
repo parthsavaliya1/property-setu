@@ -249,6 +249,10 @@ export const hi: Copy = {
     unavailable: "यह प्रॉपर्टी अब उपलब्ध नहीं है।",
   },
   listing: {
+    propertyVideo: "प्रॉपर्टी वीडियो",
+    propertyVideos: "प्रॉपर्टी वीडियो",
+    tapToWatch: "देखने के लिए टैप करें",
+    watchVideo: "प्रॉपर्टी वीडियो देखें",
     photoLimit: "प्रति प्रॉपर्टी अधिकतम {count} फ़ोटो",
     videoLimit: "अधिकतम {count} वीडियो, प्रत्येक {seconds} सेकंड",
     videoTooLong: "हर वीडियो {seconds} सेकंड या उससे छोटा होना चाहिए।",
