@@ -7,11 +7,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/logo.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#F7F3EC"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.propertyhub.app",
@@ -22,7 +17,6 @@
     },
     "android": {
       "package": "com.propertyhub.app",
-      "usesCleartextTraffic": false,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/app-icon.png",
@@ -50,6 +44,17 @@
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/logo.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#F7F3EC",
+          "enableFullScreenImage_legacy": true
+        }
+      ],
+      "expo-status-bar",
+      "expo-font",
       [
         "expo-image-picker",
         {

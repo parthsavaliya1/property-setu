@@ -27,7 +27,7 @@ for (const permission of ['READ_MEDIA_IMAGES', 'READ_MEDIA_VIDEO', 'READ_MEDIA_A
 }
 const target = mods.gradleProperties.find(item => item.key === 'android.targetSdkVersion');
 assert.ok(Number(target?.value) >= 36, 'Google Play target SDK must be at least 36');
-assert.equal(config.android.usesCleartextTraffic, false, 'Production cleartext traffic must be disabled');
+assert.equal(mods.manifest.manifest.application[0].$['android:usesCleartextTraffic'], 'false', 'Production cleartext traffic must be disabled');
 const eas = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'eas.json'), 'utf8'));
 assert.equal(eas.build.production.android.buildType, 'app-bundle', 'Production must generate an AAB');
 const iapManifest = fs.readFileSync(path.join(path.dirname(require.resolve('expo-iap/package.json')), 'android', 'src', 'main', 'AndroidManifest.xml'), 'utf8');

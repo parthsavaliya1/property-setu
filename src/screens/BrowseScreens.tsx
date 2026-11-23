@@ -1,3 +1,4 @@
+import type { ComponentRef } from "react";
 import { SafetyActions } from "../components/SafetyActions";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -700,7 +701,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
         onEndReached={() => searchPage.loadMore()}
         onEndReachedThreshold={0.4}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => searchPage.refresh()} tintColor={colors.primary} colors={[colors.primary]} />}
-        ListFooterComponent={searchPage.loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} /> : null}
+        ListFooterComponent={searchPage.loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} /> : undefined}
         renderItem={({ item }) => (
           <PropertyListCard
             item={item}
@@ -709,7 +710,7 @@ export function SearchScreen({ initialQuery, onOpen }: { initialQuery?: string; 
             onSave={() => toggleSaved(item)}
           />
         )}
-        ListEmptyComponent={loading ? <PropertyListSkeleton /> : error ? null : <EmptyState kind="search" />}
+        ListEmptyComponent={loading ? <PropertyListSkeleton /> : error ? undefined : <EmptyState kind="search" />}
       />
       <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" }}>
@@ -948,7 +949,7 @@ function ZoomablePhoto({ uri, width, height, active, onZoomed }: { uri: string; 
 function PhotoZoom({ photos, startIndex, onClose }: { photos: string[]; startIndex: number; onClose: () => void }) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const pager = useRef<ScrollView>(null);
+  const pager = useRef<ComponentRef<typeof ScrollView>>(null);
   const [index, setIndex] = useState(startIndex);
   const [zoomed, setZoomed] = useState(false);
 

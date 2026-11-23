@@ -1,3 +1,4 @@
+import type { ComponentRef } from "react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Dimensions,
@@ -70,7 +71,7 @@ export function requestScrollFocusedInput() {
 }
 
 export function KeyboardScreen({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const viewRef = useRef<View>(null);
+  const viewRef = useRef<ComponentRef<typeof View>>(null);
   const overlap = useKeyboardOverlap();
 
   useEffect(() => {
@@ -103,7 +104,7 @@ export function KeyboardScreen({ children, style }: { children: ReactNode; style
 }
 
 export function KeyboardFormScroll({ contentContainerStyle, onScroll, onLayout, ...rest }: ScrollViewProps) {
-  const ref = useRef<ScrollView>(null);
+  const ref = useRef<ComponentRef<typeof ScrollView>>(null);
   const scrollY = useRef(0);
 
   const alignFocused = useCallback(() => {

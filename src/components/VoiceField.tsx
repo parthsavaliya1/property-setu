@@ -144,8 +144,8 @@ const layoutKeys = ["flex", "flexGrow", "flexShrink", "flexBasis", "alignSelf", 
 export function VoiceTextInput({ spoken, style, onChangeText, keyboardType, multiline, ...props }: TextInputProps & { spoken?: SpokenKind }) {
   const kind = spokenKindForKeyboard(keyboardType, spoken);
   const flat = StyleSheet.flatten(style) || {};
-  const layout: ViewStyle = {};
-  const inputStyle: TextStyle = { ...flat };
+  const layout: { -readonly [K in keyof ViewStyle]: ViewStyle[K] } = {};
+  const inputStyle: { -readonly [K in keyof TextStyle]: TextStyle[K] } = { ...flat };
   for (const key of layoutKeys) {
     if (flat[key] != null) {
       layout[key] = flat[key] as never;

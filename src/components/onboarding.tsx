@@ -683,7 +683,7 @@ export function OnboardingScreen({ onNext, onSkip }: { onNext: () => void; onSki
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={palette.background} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.pager} collapsable={false} onLayout={onBodyLayout}>
         {viewport.width > 0 && viewport.height > 0 ? (
           <FlatList

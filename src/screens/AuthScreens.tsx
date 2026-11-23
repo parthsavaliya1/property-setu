@@ -57,7 +57,7 @@ export function SplashScreen({ onDone }: { onDone: (hasSession: boolean, seen: b
   };
   return (
     <View style={{ flex: 1, backgroundColor: "#1B2436" }}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="light-content" />
       <Image source={splashHouse} style={{ position: "absolute", top: 0, left: 0, width, height }} resizeMode="cover" />
       <View style={{ flex: 1, alignItems: "center", paddingTop: insets.top + 36, paddingHorizontal: 20 }}>
         <Image source={brandLogo} style={{ width: 240, height: 150 }} resizeMode="contain" />

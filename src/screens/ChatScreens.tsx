@@ -1,3 +1,4 @@
+import type { ComponentRef } from "react";
 import { AppState } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -206,7 +207,7 @@ export function ChatScreen({ conversationId, propertyId, buyerId }: { conversati
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const openedThread = useRef<{ key: string; id: string } | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const mineId = session?.user.id;
 
   useEffect(() => {
