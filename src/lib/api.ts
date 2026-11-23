@@ -1,3 +1,4 @@
+import type { MediaSettings } from "./mediaSettings";
 import Constants from "expo-constants";
 import { File } from "expo-file-system";
 import type { Category, ChatMessage, ChatThread, Inquiry, Me, NotificationItem, PropertyCard, PropertyDetail, Visit, WalletTransaction } from "../types/database";
@@ -233,6 +234,7 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  mediaSettings: () => request<MediaSettings>("/media-settings"),
   listingSettings: () =>
     request<{
       standardPrice: number;

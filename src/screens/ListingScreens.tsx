@@ -1,4 +1,4 @@
-import { DeviceEventEmitter, Platform } from "react-native";
+import { DeviceEventEmitter, Linking, Platform } from "react-native";
 import { confirmDataUse } from "../lib/confirmDataUse";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -22,6 +22,7 @@ import { getRemoteSettings, subscribeRemoteSettings } from "../lib/remoteConfig"
 import { readCurrentPlace } from "../lib/location";
 import { buttonShadow, colors } from "../theme";
 import { propertyCategoryGroups } from "../lib/propertyCategories";
+import { defaultMediaSettings, type MediaSettings } from "../lib/mediaSettings";
 import type { PropertyDetail } from "../types/database";
 
 const kinds = [
@@ -160,7 +161,9 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   const [pickedAmenitySlugs, setPickedAmenitySlugs] = useState<string[]>([]);
   const [pickedFeatures, setPickedFeatures] = useState<string[]>([]);
   const [docs, setDocs] = useState<Record<string, string>>({});
-  const [video, setVideo] = useState("");
+  const [videos, setVideos] = useState<string[]>([]);
+  const [mediaLimits, setMediaLimits] = useState<MediaSettings>(defaultMediaSettings);
+  useEffect(() => { api.mediaSettings().then(setMediaLimits).catch(() => undefined); }, []);
   const [error, setError] = useState("");
   const [filledNotice, setFilledNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -201,10 +204,10 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
       setPrice(item.price ? String(Number(item.price)) : "");
       setNegotiable(Boolean(item.is_price_negotiable));
       const all = item.images || [];
-      const clip = all.find((image) => image.image_type === "video");
+      const clips = all.filter((image) => image.image_type === "video").map(image => image.image_url).filter(Boolean);
       const photos = all.filter((image) => image.image_type !== "video").map((image) => image.image_url).filter(Boolean);
-      setImages(photos.length ? photos : item.cover_image && item.cover_image !== clip?.image_url ? [item.cover_image] : []);
-      setVideo(clip?.image_url || "");
+      setImages(photos.length ? photos : item.cover_image && !clips.includes(item.cover_image) ? [item.cover_image] : []);
+      setVideos(clips);
       setPickedAmenitySlugs((item.amenities || []).map((amenity) => amenity.slug).filter((slug) => amenityChoices.some((choice) => choice.slug === slug)));
       setPickedFeatures((item.features || []).map((feature) => feature.feature_key).filter((key) => featureChoices.includes(key)));
       const onTrial = item.listing_term === "trial";
@@ -269,40 +272,40 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
   }
 
   async function pickPhoto() {
-    if (!auth.token) {
-      setError(t.listing.signInPhotos);
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7, allowsMultipleSelection: true });
-    if (result.canceled) return;
-    setBusy(true);
+    if (!auth.token) { setError(t.listing.signInPhotos); return; }
+    setBusy(true); setError("");
     try {
-      const urls = await Promise.all(result.assets.map((asset) => uploadMedia(asset.uri, auth.token!, "image", asset.fileName, asset.mimeType)));
-      setImages((current) => [...current, ...urls]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.listing.uploadFailed);
-    } finally {
-      setBusy(false);
-    }
+      const limits = await api.mediaSettings(); setMediaLimits(limits);
+      const remaining = limits.maxPhotos - images.length;
+      if (remaining <= 0) throw new Error(fill(t.listing.photoLimit, { count: limits.maxPhotos }));
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1, allowsMultipleSelection: true, selectionLimit: remaining });
+      if (result.canceled) return;
+      if (result.assets.length > remaining) throw new Error(fill(t.listing.photoLimit, { count: limits.maxPhotos }));
+      for (const asset of result.assets) {
+        const url = await uploadMedia(asset.uri, auth.token, "image", asset.fileName, asset.mimeType);
+        setImages(current => [...current, url]);
+      }
+    } catch (error) { setError(error instanceof Error ? error.message : t.listing.uploadFailed); }
+    finally { setBusy(false); }
   }
 
   async function pickVideo() {
-    if (!auth.token) {
-      setError(t.listing.signInVideo);
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["videos"], videoMaxDuration: 60 });
-    if (result.canceled) return;
-    setBusy(true);
+    if (!auth.token) { setError(t.listing.signInVideo); return; }
+    setBusy(true); setError("");
     try {
-      const asset = result.assets[0];
-      const url = await uploadMedia(asset.uri, auth.token, "video", asset.fileName, asset.mimeType);
-      setVideo(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.listing.uploadFailed);
-    } finally {
-      setBusy(false);
-    }
+      const limits = await api.mediaSettings(); setMediaLimits(limits);
+      const remaining = limits.maxVideos - videos.length;
+      if (remaining <= 0) throw new Error(fill(t.listing.videoLimit, { count: limits.maxVideos, seconds: limits.maxVideoDurationSeconds }));
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["videos"], allowsMultipleSelection: true, selectionLimit: remaining, videoMaxDuration: limits.maxVideoDurationSeconds });
+      if (result.canceled) return;
+      if (result.assets.length > remaining) throw new Error(fill(t.listing.videoLimit, { count: limits.maxVideos, seconds: limits.maxVideoDurationSeconds }));
+      if (result.assets.some(asset => asset.duration != null && asset.duration > limits.maxVideoDurationSeconds * 1000 + 50)) throw new Error(fill(t.listing.videoTooLong, { seconds: limits.maxVideoDurationSeconds }));
+      for (const asset of result.assets) {
+        const url = await uploadMedia(asset.uri, auth.token, "video", asset.fileName, asset.mimeType);
+        setVideos(current => [...current, url]);
+      }
+    } catch (error) { setError(error instanceof Error ? error.message : t.listing.uploadFailed); }
+    finally { setBusy(false); }
   }
 
   async function pickDocument(type: string) {
@@ -441,9 +444,9 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
           latitude: latitude ?? undefined,
           longitude: longitude ?? undefined,
         },
-        images: (images.length || video) ? [
+        images: (images.length || videos.length) ? [
           ...images.map((image_url, index) => ({ image_url, image_type: "gallery", is_cover: index === 0 })),
-          ...(video ? [{ image_url: video, image_type: "video", is_cover: false }] : []),
+          ...videos.map(image_url => ({ image_url, image_type: "video", is_cover: false })),
         ] : undefined,
         amenity_ids: amenityIds,
         features: pickedFeatures.map((feature_key) => ({ feature_key })),
@@ -672,22 +675,32 @@ export function AddScreen({ propertyId, onDone }: { propertyId?: string; onDone:
         {step === 4 && (
           <View>
             <Text style={heading}>{t.listing.media}</Text>
-            <Pressable onPress={pickPhoto} style={{ borderWidth: 1, borderStyle: "dashed", borderColor: "#d9d4ca", borderRadius: 14, paddingVertical: 22, alignItems: "center", backgroundColor: "white" }}>
+            <Pressable disabled={busy} onPress={pickPhoto} style={{ borderWidth: 1, borderStyle: "dashed", borderColor: "#d9d4ca", borderRadius: 14, paddingVertical: 22, alignItems: "center", backgroundColor: "white" }}>
               <Ionicons name="cloud-upload-outline" size={22} color="#6e766f" />
               <Text style={{ fontWeight: "800", marginTop: 6 }}>{t.listing.uploadPhotos}</Text>
               <Text style={{ color: "#8a918c", marginTop: 2 }}>{t.listing.photosRequired}</Text>
             </Pressable>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-              {images.map((uri) => <Image key={uri} source={{ uri }} style={{ width: 96, height: 78, borderRadius: 12 }} />)}
-              <Pressable onPress={pickPhoto} style={{ width: 96, height: 78, borderRadius: 12, backgroundColor: "white", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#eeeae2" }}>
+              {images.map((uri, index) => <View key={`${uri}-${index}`}>
+                <Image source={{ uri }} style={{ width: 96, height: 78, borderRadius: 12 }} />
+                <Pressable onPress={() => setImages(current => current.filter((_, i) => i !== index))} disabled={busy} accessibilityRole="button" accessibilityLabel={`${t.common.delete} ${index + 1}`} style={{ position: "absolute", top: 2, right: 2, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }}><Ionicons name="close" size={18} color={colors.ink} /></Pressable>
+              </View>)}
+              <Pressable disabled={busy} onPress={pickPhoto} style={{ width: 96, height: 78, borderRadius: 12, backgroundColor: "white", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#eeeae2" }}>
                 <Text style={{ fontSize: 28, color: "#9aa19c" }}>+</Text>
               </Pressable>
             </View>
+            <Text style={{ color: colors.muted, marginTop: 10 }}>{images.length}/{mediaLimits.maxPhotos} · {fill(t.listing.photoLimit, { count: mediaLimits.maxPhotos })}</Text>
             <Text style={{ fontWeight: "800", marginTop: 18, marginBottom: 8 }}>{t.listing.uploadVideo}</Text>
-            <Pressable onPress={pickVideo} style={{ borderWidth: 1, borderStyle: "dashed", borderColor: "#d9d4ca", borderRadius: 14, height: 90, alignItems: "center", justifyContent: "center", backgroundColor: "white" }}>
-              <Ionicons name="play-circle-outline" size={26} color={video ? green : "#b0b6b1"} />
-              <Text style={{ color: video ? green : "#8a918c", marginTop: 4, fontWeight: "700" }}>{video ? t.listing.videoAdded : t.listing.addVideo}</Text>
-            </Pressable>
+            <Text style={{ color: colors.muted, marginBottom: 8 }}>{fill(t.listing.videoLimit, { count: mediaLimits.maxVideos, seconds: mediaLimits.maxVideoDurationSeconds })}</Text>
+            {videos.map((url, index) => <View key={`${url}-${index}`} style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 }}>
+              <Pressable onPress={() => { Linking.openURL(url).catch(() => setError(t.listing.uploadFailed)); }} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}><Ionicons name="play-circle-outline" size={26} color={colors.primary} /><Text style={{ color: colors.ink }}>{t.listing.videoAdded} {index + 1}</Text></Pressable>
+              <Pressable disabled={busy} onPress={() => setVideos(current => current.filter((_, i) => i !== index))} accessibilityRole="button" accessibilityLabel={`${t.common.delete} ${index + 1}`} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Ionicons name="trash-outline" size={20} color={colors.danger} /></Pressable>
+            </View>)}
+            {videos.length < mediaLimits.maxVideos && <Pressable disabled={busy} onPress={pickVideo} style={{ borderWidth: 1, borderStyle: "dashed", borderColor: colors.line, borderRadius: 14, height: 72, alignItems: "center", justifyContent: "center", backgroundColor: colors.card }}>
+              <Ionicons name="add-circle-outline" size={26} color={colors.primary} />
+              <Text style={{ color: colors.primary, marginTop: 4, fontWeight: "700" }}>{t.listing.addVideo}</Text>
+            </Pressable>}
+
           </View>
         )}
         {step === 5 && (

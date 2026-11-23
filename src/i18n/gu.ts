@@ -249,6 +249,9 @@ export const gu: Copy = {
     unavailable: "આ પ્રોપર્ટી હવે ઉપલબ્ધ નથી.",
   },
   listing: {
+    photoLimit: "દરેક પ્રોપર્ટી માટે વધુમાં વધુ {count} ફોટા",
+    videoLimit: "વધુમાં વધુ {count} વિડિયો, દરેક {seconds} સેકન્ડ",
+    videoTooLong: "દરેક વિડિયો {seconds} સેકન્ડ કે તેનાથી નાનો હોવો જોઈએ.",
     residential: "રહેણાંક",
     edit: "પ્રોપર્ટીમાં ફેરફાર કરો",
     create: "પ્રોપર્ટી લિસ્ટ કરો",

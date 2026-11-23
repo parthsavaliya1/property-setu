@@ -30,9 +30,11 @@ function harness(screenPath = 'src/screens/BrowseScreens.tsx', options = {}) {
     if (name === 'react-native') return native;
     if (name === '@react-navigation/native') return { useFocusEffect() {}, useNavigation: () => ({ goBack() {} }) };
     if (name === '@expo/vector-icons') return { Ionicons: 'Ionicons', MaterialCommunityIcons: 'MaterialCommunityIcons' };
-    if (name.endsWith('/propertyCategories')) {
+    if (name === 'expo-image-picker') return { launchImageLibraryAsync: async pickerOptions => { options.pickerOptions?.push(pickerOptions); return options.pickerResponse; } };
+    if (name.endsWith('/i18n/format')) return { fill: (text, values) => String(text).replace(/\{(\w+)\}/g, (_, key) => values[key]) };
+    if (name.endsWith('/propertyCategories') || name.endsWith('/mediaSettings')) {
       const categoryModule = { exports: {} };
-      const categoryJs = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/lib/propertyCategories.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+      const categoryJs = ts.transpileModule(fs.readFileSync(path.join(__dirname, name.endsWith('/mediaSettings') ? '../src/lib/mediaSettings.ts' : '../src/lib/propertyCategories.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
       vm.runInNewContext('(function(module,exports){' + categoryJs + '\n})')(categoryModule, categoryModule.exports);
       return categoryModule.exports;
     }
@@ -41,12 +43,12 @@ function harness(screenPath = 'src/screens/BrowseScreens.tsx', options = {}) {
     if (name.endsWith('/labels')) return { kindName: slug => slug };
     if (name.endsWith('/i18n/active')) return { getCopy: () => text };
     if (name.endsWith('/i18n')) return { useI18n: () => ({ t: text }) };
-    if (name.endsWith('/AuthContext')) return { useAuth: () => ({ me: null, token: null }) };
+    if (name.endsWith('/AuthContext')) return { useAuth: () => ({ me: null, token: options.token || null }) };
     if (name.endsWith('/FavoritesContext')) return { useFavorites: () => ({ isSaved: () => false, toggle: () => {} }) };
     if (name.endsWith('/LoginGate')) return { useRequireLogin: () => () => {} };
     if (name.endsWith('/location')) return { useBrowseCity: () => ({ city: 'Rajkot', ready: true, denied: false }) };
     if (name.endsWith('/paging')) return { usePagedProperties: load => { loads.push(load); return { items: options.items || [], loading: !options.items, loadMore() {}, refresh() {} }; } };
-    if (name.endsWith('/api')) return { cityName: value => value, PROPERTY_PAGE_SIZE: 20, sortForSearch: rows => rows, api: { properties: async query => { apiQueries.push(query); return []; } } };
+    if (name.endsWith('/api')) return { cityName: value => value, PROPERTY_PAGE_SIZE: 20, sortForSearch: rows => rows, uploadMedia: async uri => { options.uploads?.push(uri); return `https://media.example/${uri}`; }, api: { mediaSettings: async () => options.mediaLimits || { maxPhotos: 29, maxVideos: 1, maxVideoDurationSeconds: 60 }, property: async () => options.property, properties: async query => { apiQueries.push(query); return []; } } };
     if (name.endsWith('/theme')) return { colors, buttonShadow: {} };
     if (name === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) };
     if (name.endsWith('/components/ui')) return { styles: {}, EmptyState: 'EmptyState', PropertyGridSkeleton: 'Skeleton', PageHeader: 'PageHeader' };
@@ -57,6 +59,7 @@ function harness(screenPath = 'src/screens/BrowseScreens.tsx', options = {}) {
     screens: module.exports,
     render(fn, props) { cursor = 0; effects = []; loads = []; return fn(props); },
     effectFor(request) { effects.find(effect => effect.deps?.[0] === request).fn(); },
+    async effectContaining(text) { effects.find(effect => effect.fn.toString().includes(text)).fn(); await new Promise(setImmediate); },
     load(index = 0, offset = 0) { return loads[index](offset); },
     apiQueries,
   };
@@ -265,4 +268,42 @@ test('premium See All opens Search with premium-only pagination and a removable 
   search.render(search.screens.SearchScreen, { filterRequest: repeated });
   await search.load();
   assert.equal(new URLSearchParams(search.apiQueries.at(-1).slice(1)).has('listing_tier'), false);
+});
+
+
+test('editing preserves existing videos, permits a second video, and rejects an overlong video before upload', async () => {
+  const options = {
+    token: 'owner-token',
+    mediaLimits: { maxPhotos: 5, maxVideos: 2, maxVideoDurationSeconds: 60 },
+    pickerOptions: [], uploads: [],
+    pickerResponse: { canceled: false, assets: [{ uri: 'new-video.mp4', duration: 61000 }] },
+    property: { title: 'Existing house', category_slug: 'house', images: [
+      { image_type: 'gallery', image_url: 'https://media.example/photo1.jpg' },
+      { image_type: 'gallery', image_url: 'https://media.example/photo2.jpg' },
+      { image_type: 'video', image_url: 'https://media.example/existing.mp4' },
+    ] },
+  };
+  const form = harness('src/screens/ListingScreens.tsx', options);
+  const render = () => form.render(form.screens.AddScreen, { propertyId: 'property-id', onDone() {} });
+  const buttonWith = (tree, label) => find(tree, node => node.type === 'Pressable' && React.Children.toArray(node.props.children).some(child => child.props?.children === label));
+  render();
+  await form.effectContaining('.property(');
+  await form.effectContaining('.mediaSettings()');
+  let tree = render();
+  for (let step = 0; step < 4; step++) { buttonWith(tree, 'common.next').props.onPress(); tree = render(); }
+  const existing = () => find(tree, node => node.type === 'Text' && React.Children.toArray(node.props.children).join('') === 'listing.videoAdded 1');
+  assert.ok(existing());
+  await buttonWith(tree, 'listing.addVideo').props.onPress();
+  tree = render();
+  assert.equal(options.uploads.length, 0);
+  assert.ok(existing());
+  options.pickerResponse.assets[0].duration = 59000;
+  await buttonWith(tree, 'listing.addVideo').props.onPress();
+  tree = render();
+  assert.deepEqual(options.uploads, ['new-video.mp4']);
+  assert.equal(options.pickerOptions.at(-1).selectionLimit, 1);
+  assert.equal(options.pickerOptions.at(-1).videoMaxDuration, 60);
+  assert.ok(existing());
+  assert.ok(find(tree, node => node.type === 'Text' && React.Children.toArray(node.props.children).join('') === 'listing.videoAdded 2'));
+  assert.equal(buttonWith(tree, 'listing.addVideo'), undefined);
 });

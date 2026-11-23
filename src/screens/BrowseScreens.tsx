@@ -1371,6 +1371,11 @@ export function DetailsScreen({ id, onSchedule, onChat, onEdit, onInquiries, onM
               <View>
                 <Text style={{ color: colors.muted, fontSize: 15, lineHeight: 23 }} numberOfLines={expanded ? undefined : 4}>{description}</Text>
                 {description.length > 90 ? <Pressable onPress={() => setExpanded((value) => !value)}><Text style={{ color: colors.primary, fontWeight: "700", marginTop: 10 }}>{expanded ? t.details.showLess : t.details.readMore}</Text></Pressable> : null}
+                {item.images?.filter(image => image.image_type === "video").map((video, index) => (
+                  <Pressable key={video.id || `${video.image_url}-${index}`} onPress={() => { Linking.openURL(video.image_url).catch(() => setNote(t.search.unavailable)); }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, paddingVertical: 10 }}>
+                    <Ionicons name="play-circle-outline" size={26} color={colors.primary} /><Text style={{ color: colors.primary, fontWeight: "700" }}>{t.listing.videoAdded} {index + 1}</Text>
+                  </Pressable>
+                ))}
               </View>
             ) : null}
             {tab === "amenities" ? (
